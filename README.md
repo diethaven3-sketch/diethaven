@@ -1,14 +1,6 @@
-# Turborepo starter
+# DietHaven Consult
 
-This Turborepo starter is maintained by the Turborepo core team.
-
-## Using this example
-
-Run the following command:
-
-```sh
-npx create-turbo@latest
-```
+See [CLAUDE.md](./CLAUDE.md) for project scope, build order, and engineering constraints.
 
 ## What's inside?
 
@@ -16,9 +8,11 @@ This Turborepo includes the following packages/apps:
 
 ### Apps and Packages
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
+- `web`: [Next.js](https://nextjs.org/) app — dietitian + admin dashboard
+- `api`: [NestJS](https://nestjs.com/) app — shared backend API
+- `database`: Prisma schema, migrations, and generated client
+- `@repo/ui`: a stub React component library used by `web`
+- `@repo/ui-tokens`: DietHaven brand colors/typography constants
 - `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
 - `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
 

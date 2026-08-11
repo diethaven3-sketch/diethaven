@@ -27,7 +27,8 @@ Solo-developer build, **2–3 weeks**. Goal: prove the two-sided architecture en
 
 ### In scope
 - **Backend**: NestJS API + PostgreSQL. RBAC enforced at the API layer (Admin / Dietitian / Patient). Auth: email/password + OTP (mobile). Audit logging on every create/edit/view of in-scope entities. TLS in transit, encryption at rest for PII.
-- **Web (dietitian + admin)**: dietitian registration with credential fields (license number, specialty, facility) — manually approved by admin, no automated verification. Minimal admin console: list/approve/reject/suspend dietitian accounts. Dietitian invites a patient via email/link. Dietitian sees list of linked patients. **One** assessment domain only — Anthropometric: height, weight, auto-calculated BMI, weight history.
+- **Web (dietitian + admin)**: dietitian registration with credential fields (license number, specialty, facility) — manually approved by admin, no automated verification. Dietitian invites a patient via email/link. Dietitian sees list of linked patients. **One** assessment domain only — Anthropometric: height, weight, auto-calculated BMI, weight history.
+- **Admin console** (deliberately built beyond the original minimal Milestone-1 cut, at the user's explicit request — see §6 note): dietitian account management (list/approve/reject/suspend, with a detail view and linked-patient count), Nigerian Food Exchange List CRUD (reference data — see §6), an audit log viewer, and a platform stats overview. Per the guideline's own Role Permission Matrix, Admin has exactly one capability across every phase of the product — "manage platform settings & dietitian accounts" — so this is the *full* admin scope, not a slice of it. Admin never gets visibility into patient clinical data (assessments, diagnosis, intervention, food logs) at any milestone; that stays dietitian/patient-only per the source spec.
 - **Mobile (patient)**: self-registration + accept-invite flow, OTP login, profile view/edit, view linked dietitian, **read-only** view of their own anthropometric data/trend (as entered by their dietitian).
 - **Brand/UI**: DietHaven palette applied consistently (see §7). WCAG AA contrast, especially orange-on-light.
 - **Compliance baseline**: informed consent captured at registration (NDPA 2023). RBAC + audit logging as the foundation for a full compliance review later — this milestone is **not** a compliant production launch.
@@ -36,7 +37,7 @@ Solo-developer build, **2–3 weeks**. Goal: prove the two-sided architecture en
 If a task seems to require any of these, stop and confirm with the user first — it's a scope-creep signal:
 - The other five assessment domains (Biochemical, Clinical/Physical, Dietary, Environmental, Patient History).
 - Nutrition Diagnosis (PES statements, diagnosis library), manual or AI.
-- Nutrition Intervention (care plan builder, meal planning, Nigerian Food Exchange List, prescriptions).
+- Nutrition Intervention (care plan builder, meal planning, prescriptions) — the Nigerian Food Exchange List itself is now admin-managed reference data (§6), but it isn't wired into any patient care-plan/meal-planning feature yet; that integration is still out of scope.
 - Monitoring & Evaluation (lab trend tracking, progress reports, follow-up docs).
 - Daily Food Monitoring (patient food diary, adherence tracking).
 - **Any AI features** (diagnosis suggestions, intervention recommendations, AI meal planning, clinical decision-support alerts).
@@ -124,10 +125,12 @@ Build the `Assessment` model domain-flexible now (JSON `domainData` field) even 
 | `User` | id, role (`ADMIN` \| `DIETITIAN` \| `PATIENT`), name, email, phone, passwordHash, status, createdAt |
 | `DietitianProfile` | userId, licenseNumber, specialty, facility, approvalStatus |
 | `PatientProfile` | userId, dietitianId, dateOfBirth, sex, contact, consentStatus |
-| `Assessment` | id, patientId, dietitianId, date, domain (enum, only `ANTHROPOMETRIC` used now), domainData (JSON: height, weight, bmi, weightHistory[]) |
+| `Assessment` | id, patientId, dietitianId, date, domain (enum, only `ANTHROPOMETRIC` used now), domainData (JSON: height, weight, bmi — "weight history" is the ordered list of a patient's `Assessment` rows, not a field duplicated in the JSON) |
 | `AuditLog` | id, userId, action, entityType, entityId, timestamp |
+| `Invite` | id, token, email, dietitianId, status (PENDING/ACCEPTED/EXPIRED), expiresAt, acceptedAt — backs the dietitian-invites-a-patient flow; not in the original guideline's entity list but required for the feature to function |
+| `FoodExchangeItem` | id, foodName, exchangeGroup (enum), portionSize, calories, carbsG, proteinG, fatG — admin-managed reference data for the Nigerian Food Exchange List (§4.2.3 of the guideline). Added ahead of the Intervention milestone specifically to support the full admin console; **not** yet linked to any patient-facing meal-planning feature |
 
-Do not add Diagnosis, Intervention, MealPlan, FoodExchangeItem, MonitoringEntry, or FoodLog models yet — they belong to later milestones (see the full guide in `/docs` for their eventual shape).
+Do not add Diagnosis, Intervention, MealPlan, MonitoringEntry, or FoodLog models yet — they belong to later milestones (see the full guide in `/docs` for their eventual shape). `FoodExchangeItem` is the one exception, added early as admin-managed reference data.
 
 ---
 

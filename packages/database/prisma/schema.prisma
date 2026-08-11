@@ -1,0 +1,186 @@
+// Explicit output path so generation is deterministic regardless of how
+// yarn classic hoists @prisma/client across workspaces (it flip-flopped
+// between root-hoisted and nested in this package, breaking cross-package
+// type identity each time).
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  DIETITIAN
+  PATIENT
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum DietitianApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum Sex {
+  MALE
+  FEMALE
+  OTHER
+}
+
+// Only ANTHROPOMETRIC is populated in Milestone 1; the rest exist so
+// Milestone 2 domains don't require a schema migration to add.
+enum AssessmentDomain {
+  ANTHROPOMETRIC
+  BIOCHEMICAL
+  CLINICAL_PHYSICAL
+  DIETARY
+  ENVIRONMENTAL
+  PATIENT_HISTORY
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  VIEW
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+}
+
+// Nigerian Food Exchange List groups (guideline §4.2.3's own examples).
+enum ExchangeGroup {
+  STARCHES
+  LEGUMES
+  VEGETABLES
+  FRUITS
+  FATS
+  PROTEINS
+}
+
+model User {
+  id           String     @id @default(cuid())
+  role         Role
+  name         String
+  email        String     @unique
+  phone        String?
+  passwordHash String
+  status       UserStatus @default(ACTIVE)
+  otpHash      String?
+  otpExpiresAt DateTime?
+  resetPasswordHash      String?
+  resetPasswordExpiresAt DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  dietitianProfile DietitianProfile?
+  patientProfile   PatientProfile?
+
+  patientsAsDietitian    PatientProfile[] @relation("DietitianPatients")
+  assessmentsAsDietitian Assessment[]     @relation("DietitianAssessments")
+  assessmentsAsPatient   Assessment[]     @relation("PatientAssessments")
+  auditLogs              AuditLog[]
+  invitesSent            Invite[]         @relation("DietitianInvites")
+}
+
+model DietitianProfile {
+  id             String                   @id @default(cuid())
+  userId         String                   @unique
+  user           User                     @relation(fields: [userId], references: [id])
+  licenseNumber  String
+  specialty      String
+  facility       String
+  approvalStatus DietitianApprovalStatus  @default(PENDING)
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+}
+
+model PatientProfile {
+  id             String    @id @default(cuid())
+  userId         String    @unique
+  user           User      @relation(fields: [userId], references: [id])
+  dietitianId    String?
+  dietitian      User?     @relation("DietitianPatients", fields: [dietitianId], references: [id])
+  dateOfBirth    DateTime
+  sex            Sex
+  contact        String?
+  consentStatus  Boolean   @default(false)
+  consentGivenAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([dietitianId])
+}
+
+model Assessment {
+  id          String           @id @default(cuid())
+  patientId   String
+  patient     User             @relation("PatientAssessments", fields: [patientId], references: [id])
+  dietitianId String
+  dietitian   User             @relation("DietitianAssessments", fields: [dietitianId], references: [id])
+  date        DateTime         @default(now())
+  domain      AssessmentDomain
+  // e.g. for ANTHROPOMETRIC: { height, weight, bmi }. "Weight history" is the
+  // ordered list of a patient's Assessment rows, not a field duplicated here.
+  domainData  Json
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([patientId])
+  @@index([dietitianId])
+}
+
+model AuditLog {
+  id         String      @id @default(cuid())
+  userId     String
+  user       User        @relation(fields: [userId], references: [id])
+  action     AuditAction
+  entityType String
+  entityId   String
+  timestamp  DateTime    @default(now())
+
+  @@index([userId])
+  @@index([entityType, entityId])
+}
+
+model Invite {
+  id          String       @id @default(cuid())
+  token       String       @unique
+  email       String
+  dietitianId String
+  dietitian   User         @relation("DietitianInvites", fields: [dietitianId], references: [id])
+  status      InviteStatus @default(PENDING)
+  expiresAt   DateTime
+  createdAt   DateTime     @default(now())
+  acceptedAt  DateTime?
+
+  @@index([dietitianId])
+}
+
+// Admin-managed reference data. Not yet linked to any patient-facing
+// meal-planning feature (that's Nutrition Intervention, a later milestone).
+model FoodExchangeItem {
+  id            String        @id @default(cuid())
+  foodName      String
+  exchangeGroup ExchangeGroup
+  portionSize   String
+  calories      Float?
+  carbsG        Float?
+  proteinG      Float?
+  fatG          Float?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([exchangeGroup])
+}
