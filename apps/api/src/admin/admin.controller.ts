@@ -7,6 +7,7 @@ import {
 } from "@repo/types";
 import { Role } from "database";
 import { Roles } from "../common/decorators/roles.decorator";
+import { CurrentUser, type AuthenticatedUser } from "../common/decorators/current-user.decorator";
 import { ZodValidationPipe } from "../common/pipes/zod-validation.pipe";
 import { AdminService } from "./admin.service";
 
@@ -21,8 +22,8 @@ export class AdminController {
   }
 
   @Get(":id")
-  getDetail(@Param("id") id: string) {
-    return this.adminService.getDietitianDetail(id);
+  getDetail(@CurrentUser() admin: AuthenticatedUser, @Param("id") id: string) {
+    return this.adminService.getDietitianDetail(admin.id, id);
   }
 
   @Patch(":id/status")

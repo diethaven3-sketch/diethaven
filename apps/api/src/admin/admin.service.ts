@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import type { ListDietitiansQuery, UpdateDietitianStatusInput } from "@repo/types";
 import { PrismaService } from "../prisma/prisma.service";
+import { AuditService } from "../audit/audit.service";
 
 const dietitianUserSelect = {
   id: true,
@@ -13,7 +14,10 @@ const dietitianUserSelect = {
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   listDietitians(status?: ListDietitiansQuery["status"]) {
     return this.prisma.dietitianProfile.findMany({
@@ -23,7 +27,7 @@ export class AdminService {
     });
   }
 
-  async getDietitianDetail(id: string) {
+  async getDietitianDetail(adminId: string, id: string) {
     const profile = await this.prisma.dietitianProfile.findUnique({
       where: { id },
       include: { user: { select: dietitianUserSelect } },
@@ -40,6 +44,13 @@ export class AdminService {
         user: { select: { name: true, email: true } },
       },
       orderBy: { createdAt: "desc" },
+    });
+
+    await this.audit.log({
+      userId: adminId,
+      action: "VIEW",
+      entityType: "PatientProfile",
+      entityId: profile.userId,
     });
 
     return {

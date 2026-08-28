@@ -34,12 +34,21 @@ export class DietitianService {
     });
   }
 
-  listPatients(dietitianId: string) {
-    return this.prisma.patientProfile.findMany({
+  async listPatients(dietitianId: string) {
+    const patients = await this.prisma.patientProfile.findMany({
       where: { dietitianId },
       select: patientSelect,
       orderBy: { createdAt: "desc" },
     });
+
+    await this.audit.log({
+      userId: dietitianId,
+      action: "VIEW",
+      entityType: "PatientProfile",
+      entityId: dietitianId,
+    });
+
+    return patients;
   }
 
   async getPatient(dietitianId: string, patientUserId: string) {
