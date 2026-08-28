@@ -152,7 +152,7 @@ These hex values are approximations pending confirmation against DietHaven's bra
 These apply to every PR from day one, not deferred to a later "polish" pass:
 
 - **RBAC enforced server-side.** Every NestJS endpoint checks the authenticated user's role via a Guard. Never rely on the frontend hiding a button — a patient account must never be able to fetch another patient's data, verify this with a test, not just a UI check.
-- **Encrypt in transit and at rest.** TLS everywhere (deployment config). PII fields (DOB, contact, health data) encrypted at rest — confirm the specific approach (column-level encryption vs. full-disk/managed Postgres encryption) before storing real patient data.
+- **Encrypt in transit and at rest.** TLS everywhere (deployment config). At-rest encryption of PII (DOB, contact, health data) is satisfied by deploying on a **managed Postgres host with encryption-at-rest enabled by default** (RDS, Supabase, Neon, Railway, Render, Cloud SQL all qualify) — decided 2026-08-28, no column-level/`pgcrypto` encryption planned for this milestone. This is a deployment-config requirement, not application code: before any real patient data is stored, whoever provisions the database **must confirm the chosen host actually has encryption-at-rest on** (most enable it by default, but confirm — don't assume). **Self-hosting Postgres (a bare VM, Docker without a managed disk layer) does not satisfy this constraint** unless disk/volume encryption is separately configured — treat that as blocking for real patient data, not just a nice-to-have.
 - **Audit every access.** Every create, edit, and view of `PatientProfile` or `Assessment` writes an `AuditLog` row: who, what, when.
 - **Consent before data collection.** A patient cannot complete registration without consent capture (NDPA 2023).
 - **Label nothing as AI.** There are no AI features in this milestone — don't add "AI Suggested" badges or similar UI for anything that isn't actually AI-generated.
@@ -162,7 +162,7 @@ These apply to every PR from day one, not deferred to a later "polish" pass:
 ## 9. Open items (need a decision before or during this milestone)
 
 - Confirm exact brand hex codes against DietHaven's brand sheet.
-- Confirm approach for at-rest encryption of PII columns (Prisma middleware + `pgcrypto`, vs. relying on managed Postgres encryption).
+- Hosting provider not chosen yet — when it is, confirm it has encryption-at-rest enabled before storing real patient data (see §8; this is the only remaining step to close out that constraint).
 - Nigerian Food Exchange List dataset source — not needed for Milestone 1, but worth sourcing now so Milestone 2 (Intervention) isn't blocked.
 - AI provider/model choice — not needed until the AI milestone, but data-handling implications (sending patient data to a third-party API) need an early conversation.
 - Subscription/billing model — affects `User`/account tiers, ideally decided before Milestone 2.
