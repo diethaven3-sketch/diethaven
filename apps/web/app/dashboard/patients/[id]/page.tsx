@@ -1,17 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { assessmentCreateSchema } from "@repo/types";
+import { ASSESSMENT_DOMAIN_LABELS, ASSESSMENT_DOMAIN_ORDER, type AssessmentDomain } from "@repo/types";
 import { apiFetch, ApiError } from "../../../../lib/api-client";
 import { useAuth } from "../../../../lib/auth-context";
 import { RequireRole } from "../../../../components/require-role";
 import { AppShell } from "../../../../components/app-shell";
-import { Button } from "../../../../components/ui/button";
 import { Banner } from "../../../../components/ui/banner";
-import { Card } from "../../../../components/ui/card";
-import { Field } from "../../../../components/ui/input";
-import { Table, Thead, Tbody, Th, Td } from "../../../../components/ui/table";
+import { DOMAIN_FORMS } from "../../../../components/assessment/domain-forms";
+import { DomainHistory, type AssessmentRow } from "../../../../components/assessment/domain-history";
 
 interface PatientDetail {
   userId: string;
@@ -20,82 +18,41 @@ interface PatientDetail {
   user: { name: string; email: string };
 }
 
-interface AssessmentRow {
-  id: string;
-  date: string;
-  domainData: { height: number; weight: number; bmi: number };
-}
-
-function AssessmentForm({ patientId, onCreated }: { patientId: string; onCreated: () => void }) {
-  const { token } = useAuth();
-  const [height, setHeight] = useState("");
-  const [weight, setWeight] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  const onSubmit = async (event: FormEvent) => {
-    event.preventDefault();
-    setError(null);
-
-    const parsed = assessmentCreateSchema.safeParse({
-      patientId,
-      height: Number(height),
-      weight: Number(weight),
-    });
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "Enter valid height and weight.");
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      await apiFetch("/assessments", { method: "POST", token, body: parsed.data });
-      setHeight("");
-      setWeight("");
-      onCreated();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to save assessment.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
+function DomainTabs({
+  active,
+  counts,
+  onSelect,
+}: {
+  active: AssessmentDomain;
+  counts: Record<string, number>;
+  onSelect: (domain: AssessmentDomain) => void;
+}) {
   return (
-    <Card>
-      <h3 className="text-lg font-bold text-heading">New anthropometric entry</h3>
-      <form className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={onSubmit} noValidate>
-        <div className="flex-1">
-          <Field
-            label="Height (cm)"
-            type="number"
-            inputMode="decimal"
-            name="height"
-            value={height}
-            onChange={(e) => setHeight(e.target.value)}
-            required
-          />
-        </div>
-        <div className="flex-1">
-          <Field
-            label="Weight (kg)"
-            type="number"
-            inputMode="decimal"
-            name="weight"
-            value={weight}
-            onChange={(e) => setWeight(e.target.value)}
-            required
-          />
-        </div>
-        <Button type="submit" loading={submitting}>
-          Save
-        </Button>
-      </form>
-      {error ? (
-        <Banner tone="danger" className="mt-3">
-          {error}
-        </Banner>
-      ) : null}
-    </Card>
+    <div className="overflow-x-auto border-b border-gray-200">
+      <div role="tablist" aria-label="Assessment domains" className="flex min-w-max gap-1">
+        {ASSESSMENT_DOMAIN_ORDER.map((domain) => {
+          const selected = domain === active;
+          const count = counts[domain] ?? 0;
+          return (
+            <button
+              key={domain}
+              role="tab"
+              type="button"
+              aria-selected={selected}
+              onClick={() => onSelect(domain)}
+              className={`cursor-pointer whitespace-nowrap border-b-2 px-4 py-3 text-sm font-medium transition-colors duration-200 ${
+                selected
+                  ? "border-primary text-primary-dark"
+                  : "border-transparent text-body hover:border-gray-300 hover:text-heading"
+              }`}
+            >
+              {ASSESSMENT_DOMAIN_LABELS[domain]}
+              {count > 0 ? <span className="ml-2 text-xs text-body">({count})</span> : null}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -104,6 +61,7 @@ function PatientDetailView({ patientId }: { patientId: string }) {
   const [patient, setPatient] = useState<PatientDetail | null>(null);
   const [assessments, setAssessments] = useState<AssessmentRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [activeDomain, setActiveDomain] = useState<AssessmentDomain>("PATIENT_HISTORY");
 
   const load = useCallback(async () => {
     try {
@@ -122,9 +80,20 @@ function PatientDetailView({ patientId }: { patientId: string }) {
     void load();
   }, [load]);
 
+  const rows = assessments ?? [];
+  const counts = rows.reduce<Record<string, number>>((acc, row) => {
+    acc[row.domain] = (acc[row.domain] ?? 0) + 1;
+    return acc;
+  }, {});
+  const ActiveForm = DOMAIN_FORMS[activeDomain];
+
   return (
     <AppShell title={patient ? patient.user.name : "Patient"}>
-      {error ? <Banner tone="danger" className="mb-6">{error}</Banner> : null}
+      {error ? (
+        <Banner tone="danger" className="mb-6">
+          {error}
+        </Banner>
+      ) : null}
 
       {patient ? (
         <p className="mb-6 text-sm text-body">
@@ -132,37 +101,27 @@ function PatientDetailView({ patientId }: { patientId: string }) {
         </p>
       ) : null}
 
-      <AssessmentForm patientId={patientId} onCreated={load} />
+      <h2 className="text-xl font-bold text-heading">Nutrition assessment</h2>
+      <p className="mt-1 text-sm text-body">
+        Each domain saves on its own, so you can complete them in any order and come back to the rest later.
+      </p>
 
-      <h2 className="mt-8 text-xl font-bold text-heading">Weight &amp; BMI history</h2>
-      <Card className="mt-3 p-0">
+      <div className="mt-4">
+        <DomainTabs active={activeDomain} counts={counts} onSelect={setActiveDomain} />
+      </div>
+
+      <div className="mt-6">
+        <ActiveForm patientId={patientId} onSaved={load} />
+      </div>
+
+      <h3 className="mt-8 text-lg font-bold text-heading">{ASSESSMENT_DOMAIN_LABELS[activeDomain]} history</h3>
+      <div className="mt-3">
         {assessments === null ? (
-          <p className="p-6 text-sm text-body">Loading…</p>
-        ) : assessments.length === 0 ? (
-          <p className="p-6 text-sm text-body">No anthropometric entries yet.</p>
+          <p className="text-sm text-body">Loading…</p>
         ) : (
-          <Table>
-            <Thead>
-              <tr>
-                <Th>Date</Th>
-                <Th>Height (cm)</Th>
-                <Th>Weight (kg)</Th>
-                <Th>BMI</Th>
-              </tr>
-            </Thead>
-            <Tbody>
-              {assessments.map((a) => (
-                <tr key={a.id}>
-                  <Td>{new Date(a.date).toLocaleDateString()}</Td>
-                  <Td>{a.domainData.height}</Td>
-                  <Td>{a.domainData.weight}</Td>
-                  <Td>{a.domainData.bmi}</Td>
-                </tr>
-              ))}
-            </Tbody>
-          </Table>
+          <DomainHistory domain={activeDomain} entries={rows.filter((row) => row.domain === activeDomain)} />
         )}
-      </Card>
+      </div>
     </AppShell>
   );
 }
