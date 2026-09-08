@@ -21,13 +21,17 @@ Two user-facing apps, one shared backend:
 
 ---
 
-## 2. Current milestone: Milestone 1 (build this now)
+## 2. Current scope
 
-Solo-developer build, **2–3 weeks**. Goal: prove the two-sided architecture end-to-end — auth, RBAC, patient–dietitian linkage, and **one** complete clinical data flow — not a partial slice of every feature.
+**Milestone 1 is complete.** It proved the two-sided architecture end-to-end — auth, RBAC, patient–dietitian linkage, and one complete clinical data flow across web, mobile, and the shared API.
 
-### In scope
+Work has since moved into the guideline's **Phase 2 (Core NCP)**: the full six-domain Nutrition Assessment and manual Nutrition Diagnosis are built. **Intervention** is the remaining Phase 2 piece and is still out of scope until asked for — see the list below, which stays authoritative.
+
+### In scope (built)
 - **Backend**: NestJS API + PostgreSQL. RBAC enforced at the API layer (Admin / Dietitian / Patient). Auth: email/password + OTP (mobile). Audit logging on every create/edit/view of in-scope entities. TLS in transit, encryption at rest for PII.
-- **Web (dietitian + admin)**: dietitian registration with credential fields (license number, specialty, facility) — manually approved by admin, no automated verification. Dietitian invites a patient via email/link. Dietitian sees list of linked patients. **One** assessment domain only — Anthropometric: height, weight, auto-calculated BMI, weight history.
+- **Web (dietitian + admin)**: dietitian registration with credential fields (license number, specialty, facility) — manually approved by admin, no automated verification. Dietitian invites a patient via email/link. Dietitian sees list of linked patients. Dietitian can view/edit their own profile and change their password (credentials stay read-only — an admin verified them at approval).
+- **Nutrition Assessment — all six IDNT domains** (added after Milestone 1 closed, at the user's explicit request; guideline §4.2.1): Patient History, Anthropometric, Biochemical/Laboratory, Nutrition-Focused Physical, Dietary, and Environmental. Each domain is a separate `Assessment` row, so the forms are stage-gated — a dietitian saves progress per domain rather than completing one long form. Derived values are computed server-side and never accepted from the client: BMI from height/weight, and lab results flagged LOW/NORMAL/HIGH against the standard adult reference ranges in `packages/types/src/lab-ranges.ts`. Those ranges are **advisory defaults, not a clinical source of truth** — real ranges vary by lab, assay, sex, and age, so a flag means "look at this", never a diagnosis.
+- **Nutrition Diagnosis — manual, no AI** (guideline §4.2.2): IDNT PES statements (Problem / Etiology / Signs & Symptoms) with a live full-sentence preview. A curated starter library of IDNT terms grouped by the three IDNT domains (Intake, Clinical, Behavioral-Environmental) lives in `packages/types/src/diagnosis.ts`; it is a **working subset, not the licensed IDNT reference**, and the form always accepts a free-text problem so a dietitian is never boxed in. Signs/symptoms are cited from the patient's own recorded assessment findings — each citation is stored on the diagnosis as `evidence`, so an accepted diagnosis stays traceable back to the data that justified it. Status is ACTIVE / RESOLVED / RULED_OUT (rule-out is how a diagnosis is rejected). The `aiGenerated` column exists because the guideline's entity list defines it, but the service hard-codes it to `false` and no UI may present a diagnosis as AI-generated — see §8.
 - **Admin console** (deliberately built beyond the original minimal Milestone-1 cut, at the user's explicit request — see §6 note): dietitian account management (list/approve/reject/suspend, with a detail view and linked-patient count), Nigerian Food Exchange List CRUD (reference data — see §6), an audit log viewer, and a platform stats overview. Per the guideline's own Role Permission Matrix, Admin has exactly one capability across every phase of the product — "manage platform settings & dietitian accounts" — so this is the *full* admin scope, not a slice of it. Admin never gets visibility into patient clinical data (assessments, diagnosis, intervention, food logs) at any milestone; that stays dietitian/patient-only per the source spec.
 - **Mobile (patient)**: self-registration + accept-invite flow, OTP login, profile view/edit, view linked dietitian, **read-only** view of their own anthropometric data/trend (as entered by their dietitian).
 - **Brand/UI**: DietHaven palette applied consistently (see §7). WCAG AA contrast, especially orange-on-light.
@@ -35,8 +39,6 @@ Solo-developer build, **2–3 weeks**. Goal: prove the two-sided architecture en
 
 ### Explicitly out of scope — do not build unless asked
 If a task seems to require any of these, stop and confirm with the user first — it's a scope-creep signal:
-- The other five assessment domains (Biochemical, Clinical/Physical, Dietary, Environmental, Patient History).
-- Nutrition Diagnosis (PES statements, diagnosis library), manual or AI.
 - Nutrition Intervention (care plan builder, meal planning, prescriptions) — the Nigerian Food Exchange List itself is now admin-managed reference data (§6), but it isn't wired into any patient care-plan/meal-planning feature yet; that integration is still out of scope.
 - Monitoring & Evaluation (lab trend tracking, progress reports, follow-up docs).
 - Daily Food Monitoring (patient food diary, adherence tracking).
@@ -118,19 +120,20 @@ Given the solo, sequenced build order in §2, you will usually run **one** app a
 
 ## 6. Data model (Milestone 1 — Prisma)
 
-Build the `Assessment` model domain-flexible now (JSON `domainData` field) even though only `anthropometric` is populated in this milestone — this avoids a schema rebuild when the other five domains are added in Milestone 2.
+The `Assessment` model is domain-flexible by design (JSON `domainData` field). That paid off: adding the other five domains needed no migration at all — the `AssessmentDomain` enum already listed them and only the payload schemas were new.
 
 | Model | Key fields |
 |---|---|
 | `User` | id, role (`ADMIN` \| `DIETITIAN` \| `PATIENT`), name, email, phone, passwordHash, status, createdAt |
 | `DietitianProfile` | userId, licenseNumber, specialty, facility, approvalStatus |
 | `PatientProfile` | userId, dietitianId, dateOfBirth, sex, contact, consentStatus |
-| `Assessment` | id, patientId, dietitianId, date, domain (enum, only `ANTHROPOMETRIC` used now), domainData (JSON: height, weight, bmi — "weight history" is the ordered list of a patient's `Assessment` rows, not a field duplicated in the JSON) |
+| `Assessment` | id, patientId, dietitianId, date, domain (enum — all six domains now in use), domainData (JSON, shape per domain; for `ANTHROPOMETRIC` it is height/weight/bmi, and "weight history" is the ordered list of a patient's rows, not a field duplicated in the JSON). Zod schemas per domain live in `packages/types/src/assessments.ts` as a discriminated union on `domain`. |
+| `Diagnosis` | id, patientId, dietitianId, assessmentId (nullable), domain (`INTAKE` \| `CLINICAL` \| `BEHAVIORAL_ENVIRONMENTAL`), problemCode (nullable — set when the problem came from the curated library), problem, etiology, signsSymptoms, evidence (JSON array of `{assessmentId, domain, field, label, value}`), status (`ACTIVE` \| `RESOLVED` \| `RULED_OUT`), aiGenerated (always `false` today) |
 | `AuditLog` | id, userId, action, entityType, entityId, timestamp |
 | `Invite` | id, token, email, dietitianId, status (PENDING/ACCEPTED/EXPIRED), expiresAt, acceptedAt — backs the dietitian-invites-a-patient flow; not in the original guideline's entity list but required for the feature to function |
 | `FoodExchangeItem` | id, foodName, exchangeGroup (enum), portionSize, calories, carbsG, proteinG, fatG — admin-managed reference data for the Nigerian Food Exchange List (§4.2.3 of the guideline). Added ahead of the Intervention milestone specifically to support the full admin console; **not** yet linked to any patient-facing meal-planning feature |
 
-Do not add Diagnosis, Intervention, MealPlan, MonitoringEntry, or FoodLog models yet — they belong to later milestones (see the full guide in `/docs` for their eventual shape). `FoodExchangeItem` is the one exception, added early as admin-managed reference data.
+Do not add Intervention, MealPlan, MonitoringEntry, or FoodLog models yet — they belong to later milestones (see the full guide in `/docs` for their eventual shape). `FoodExchangeItem` is the one exception, added early as admin-managed reference data.
 
 ---
 
