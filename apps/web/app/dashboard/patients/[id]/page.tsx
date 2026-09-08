@@ -11,6 +11,10 @@ import { Banner } from "../../../../components/ui/banner";
 import { DOMAIN_FORMS } from "../../../../components/assessment/domain-forms";
 import { DomainHistory, type AssessmentRow } from "../../../../components/assessment/domain-history";
 import { DiagnosisPanel, type DiagnosisRow } from "../../../../components/diagnosis/diagnosis-panel";
+import {
+  InterventionPanel,
+  type InterventionRow,
+} from "../../../../components/intervention/intervention-panel";
 
 interface PatientDetail {
   userId: string;
@@ -19,11 +23,14 @@ interface PatientDetail {
   user: { name: string; email: string };
 }
 
-type Stage = "ASSESSMENT" | "DIAGNOSIS";
+// The IDNT stages in the order the guideline sequences them. Monitoring &
+// Evaluation is Phase 3 and not built yet.
+type Stage = "ASSESSMENT" | "DIAGNOSIS" | "INTERVENTION";
 
 const STAGE_LABELS: Record<Stage, string> = {
   ASSESSMENT: "Assessment",
   DIAGNOSIS: "Diagnosis",
+  INTERVENTION: "Intervention",
 };
 
 function TabBar<T extends string>({
@@ -75,20 +82,23 @@ function PatientDetailView({ patientId }: { patientId: string }) {
   const [patient, setPatient] = useState<PatientDetail | null>(null);
   const [assessments, setAssessments] = useState<AssessmentRow[] | null>(null);
   const [diagnoses, setDiagnoses] = useState<DiagnosisRow[] | null>(null);
+  const [interventions, setInterventions] = useState<InterventionRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stage, setStage] = useState<Stage>("ASSESSMENT");
   const [activeDomain, setActiveDomain] = useState<AssessmentDomain>("PATIENT_HISTORY");
 
   const load = useCallback(async () => {
     try {
-      const [patientRes, assessmentsRes, diagnosesRes] = await Promise.all([
+      const [patientRes, assessmentsRes, diagnosesRes, interventionsRes] = await Promise.all([
         apiFetch<PatientDetail>(`/dietitian/patients/${patientId}`, { token }),
         apiFetch<AssessmentRow[]>(`/assessments?patientId=${patientId}`, { token }),
         apiFetch<DiagnosisRow[]>(`/diagnoses?patientId=${patientId}`, { token }),
+        apiFetch<InterventionRow[]>(`/interventions?patientId=${patientId}`, { token }),
       ]);
       setPatient(patientRes);
       setAssessments(assessmentsRes);
       setDiagnoses(diagnosesRes);
+      setInterventions(interventionsRes);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to load patient.");
     }
@@ -106,6 +116,7 @@ function PatientDetailView({ patientId }: { patientId: string }) {
   const stageCounts = {
     ASSESSMENT: rows.length,
     DIAGNOSIS: diagnoses?.length ?? 0,
+    INTERVENTION: interventions?.length ?? 0,
   };
   const ActiveForm = DOMAIN_FORMS[activeDomain];
 
@@ -125,7 +136,7 @@ function PatientDetailView({ patientId }: { patientId: string }) {
 
       <TabBar
         ariaLabel="Nutrition Care Process stage"
-        items={["ASSESSMENT", "DIAGNOSIS"]}
+        items={["ASSESSMENT", "DIAGNOSIS", "INTERVENTION"]}
         labels={STAGE_LABELS}
         counts={stageCounts}
         active={stage}
@@ -163,16 +174,25 @@ function PatientDetailView({ patientId }: { patientId: string }) {
             )}
           </div>
         </>
-      ) : (
+      ) : stage === "DIAGNOSIS" ? (
         <>
           <h2 className="mt-6 text-xl font-bold text-heading">Nutrition diagnosis</h2>
           <p className="mt-1 mb-6 text-sm text-body">
             PES statements drawn from this patient&apos;s assessment findings.
           </p>
-          <DiagnosisPanel
+          <DiagnosisPanel patientId={patientId} assessments={rows} diagnoses={diagnoses} onChanged={load} />
+        </>
+      ) : (
+        <>
+          <h2 className="mt-6 text-xl font-bold text-heading print:hidden">Nutrition intervention</h2>
+          <p className="mt-1 mb-6 text-sm text-body print:hidden">
+            Care plans answering an accepted diagnosis, with meal plans built from the Nigerian Food Exchange List.
+          </p>
+          <InterventionPanel
             patientId={patientId}
-            assessments={rows}
-            diagnoses={diagnoses}
+            patientName={patient?.user.name ?? "Patient"}
+            diagnoses={diagnoses ?? []}
+            interventions={interventions}
             onChanged={load}
           />
         </>

@@ -44,3 +44,26 @@
     outline-offset: 2px;
   }
 }
+
+/*
+ * Printing a nutrition prescription: window.print() would otherwise put the
+ * whole dashboard on paper. Everything is hidden, then only the marked subtree
+ * is made visible again and lifted to the top of the page.
+ */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .print-target,
+  .print-target * {
+    visibility: visible;
+  }
+
+  .print-target {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+}
