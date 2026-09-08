@@ -4,11 +4,15 @@ import { useMemo, useState, type FormEvent } from "react";
 import {
   INTERVENTION_STATUS_LABELS,
   OUTCOME_STATUS_LABELS,
+  adherenceByDay,
   anthropometricTrend,
+  averageAdherence,
   followUpCreateSchema,
   labTrends,
+  plannedExchanges,
   weightSummary,
   type LabTrend,
+  type Meal,
   type OutcomeStatus,
 } from "@repo/types";
 import { apiFetch, ApiError } from "../../lib/api-client";
@@ -23,6 +27,7 @@ import { Table, Thead, Tbody, Th, Td } from "../ui/table";
 import type { AssessmentRow } from "../assessment/domain-history";
 import type { DiagnosisRow } from "../diagnosis/diagnosis-panel";
 import type { InterventionRow } from "../intervention/intervention-panel";
+import { FoodLogActivity, type FoodLogRow } from "./food-log-activity";
 
 export interface FollowUpRow {
   id: string;
@@ -80,20 +85,29 @@ function ProgressReport({
   diagnoses,
   interventions,
   followUps,
+  foodLogs,
+  activeMeals,
 }: {
   patientName: string;
   assessments: AssessmentRow[];
   diagnoses: DiagnosisRow[];
   interventions: InterventionRow[];
   followUps: FollowUpRow[];
+  foodLogs: FoodLogRow[];
+  activeMeals: Meal[] | null;
 }) {
   const anthro = useMemo(() => anthropometricTrend(assessments), [assessments]);
   const summary = useMemo(() => weightSummary(anthro), [anthro]);
   const trends = useMemo(() => labTrends(assessments), [assessments]);
+  const adherenceDays = useMemo(
+    () => adherenceByDay(foodLogs, plannedExchanges(activeMeals ?? [])),
+    [foodLogs, activeMeals],
+  );
+  const averageAdherencePercent = useMemo(() => averageAdherence(adherenceDays), [adherenceDays]);
   const latest = anthro[anthro.length - 1];
   const abnormal = trends.filter((trend) => trend.latest.flag !== "NORMAL");
 
-  const hasAnything = anthro.length > 0 || trends.length > 0 || followUps.length > 0;
+  const hasAnything = anthro.length > 0 || trends.length > 0 || followUps.length > 0 || foodLogs.length > 0;
   if (!hasAnything) {
     return (
       <Card>
@@ -157,6 +171,27 @@ function ProgressReport({
       </section>
 
       <section className="mt-5">
+        <h4 className="text-sm font-bold uppercase tracking-wide text-heading">Dietary adherence</h4>
+        {foodLogs.length === 0 ? (
+          <p className="mt-1 text-sm text-body">No food diary entries logged.</p>
+        ) : !activeMeals ? (
+          <p className="mt-1 text-sm text-body">
+            {foodLogs.length} diary {foodLogs.length === 1 ? "entry" : "entries"} logged across{" "}
+            {adherenceDays.length} {adherenceDays.length === 1 ? "day" : "days"}. No meal plan is attached to an
+            active intervention, so adherence cannot be measured.
+          </p>
+        ) : (
+          <p className="mt-1 text-sm text-body">
+            {averageAdherencePercent === null
+              ? `${foodLogs.length} diary entries logged, but none carry exchange quantities, so adherence cannot be scored.`
+              : `${averageAdherencePercent}% average adherence across ${adherenceDays.length} logged ${
+                  adherenceDays.length === 1 ? "day" : "days"
+                }, measured against the current meal plan.`}
+          </p>
+        )}
+      </section>
+
+      <section className="mt-5">
         <h4 className="text-sm font-bold uppercase tracking-wide text-heading">Care history</h4>
         <p className="mt-1 text-sm text-body">
           {diagnoses.length} {diagnoses.length === 1 ? "diagnosis" : "diagnoses"} ·{" "}
@@ -172,8 +207,9 @@ function ProgressReport({
       </section>
 
       <p className="mt-5 border-t border-gray-200 pt-3 text-xs text-body">
-        Summarised from data recorded in DietHaven Consult. Dietary adherence is not included — daily food logging is
-        not built yet, so no adherence figure would be based on real data.
+        Summarised from data recorded in DietHaven Consult. Adherence counts logged exchange quantities against the
+        meal plan currently attached to this patient&apos;s intervention, including for past days; it is not a
+        validated clinical measure and says nothing about meal timing or food quality.
       </p>
     </Card>
   );
@@ -319,6 +355,7 @@ export function MonitoringPanel({
   diagnoses,
   interventions,
   followUps,
+  foodLogs,
   onChanged,
 }: {
   patientId: string;
@@ -327,10 +364,16 @@ export function MonitoringPanel({
   diagnoses: DiagnosisRow[];
   interventions: InterventionRow[];
   followUps: FollowUpRow[] | null;
+  foodLogs: FoodLogRow[] | null;
   onChanged: () => void;
 }) {
   const trends = useMemo(() => labTrends(assessments), [assessments]);
   const visits = followUps ?? [];
+  // Adherence is measured against the plan on the active intervention; if
+  // several are active the most recent one wins.
+  const activeMeals =
+    interventions.find((intervention) => intervention.status === "ACTIVE" && intervention.mealPlan)?.mealPlan?.meals ??
+    null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -340,6 +383,8 @@ export function MonitoringPanel({
         diagnoses={diagnoses}
         interventions={interventions}
         followUps={visits}
+        foodLogs={foodLogs ?? []}
+        activeMeals={activeMeals}
       />
 
       <div className="print:hidden">
@@ -372,6 +417,10 @@ export function MonitoringPanel({
             </Table>
           )}
         </Card>
+      </div>
+
+      <div className="print:hidden">
+        <FoodLogActivity logs={foodLogs ?? []} activeMeals={activeMeals} />
       </div>
 
       <div className="print:hidden">

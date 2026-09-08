@@ -16,6 +16,7 @@ import {
   type InterventionRow,
 } from "../../../../components/intervention/intervention-panel";
 import { MonitoringPanel, type FollowUpRow } from "../../../../components/monitoring/monitoring-panel";
+import type { FoodLogRow } from "../../../../components/monitoring/food-log-activity";
 
 interface PatientDetail {
   userId: string;
@@ -85,24 +86,28 @@ function PatientDetailView({ patientId }: { patientId: string }) {
   const [diagnoses, setDiagnoses] = useState<DiagnosisRow[] | null>(null);
   const [interventions, setInterventions] = useState<InterventionRow[] | null>(null);
   const [followUps, setFollowUps] = useState<FollowUpRow[] | null>(null);
+  const [foodLogs, setFoodLogs] = useState<FoodLogRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stage, setStage] = useState<Stage>("ASSESSMENT");
   const [activeDomain, setActiveDomain] = useState<AssessmentDomain>("PATIENT_HISTORY");
 
   const load = useCallback(async () => {
     try {
-      const [patientRes, assessmentsRes, diagnosesRes, interventionsRes, followUpsRes] = await Promise.all([
-        apiFetch<PatientDetail>(`/dietitian/patients/${patientId}`, { token }),
-        apiFetch<AssessmentRow[]>(`/assessments?patientId=${patientId}`, { token }),
-        apiFetch<DiagnosisRow[]>(`/diagnoses?patientId=${patientId}`, { token }),
-        apiFetch<InterventionRow[]>(`/interventions?patientId=${patientId}`, { token }),
-        apiFetch<FollowUpRow[]>(`/follow-ups?patientId=${patientId}`, { token }),
-      ]);
+      const [patientRes, assessmentsRes, diagnosesRes, interventionsRes, followUpsRes, foodLogsRes] =
+        await Promise.all([
+          apiFetch<PatientDetail>(`/dietitian/patients/${patientId}`, { token }),
+          apiFetch<AssessmentRow[]>(`/assessments?patientId=${patientId}`, { token }),
+          apiFetch<DiagnosisRow[]>(`/diagnoses?patientId=${patientId}`, { token }),
+          apiFetch<InterventionRow[]>(`/interventions?patientId=${patientId}`, { token }),
+          apiFetch<FollowUpRow[]>(`/follow-ups?patientId=${patientId}`, { token }),
+          apiFetch<FoodLogRow[]>(`/dietitian/food-logs?patientId=${patientId}`, { token }),
+        ]);
       setPatient(patientRes);
       setAssessments(assessmentsRes);
       setDiagnoses(diagnosesRes);
       setInterventions(interventionsRes);
       setFollowUps(followUpsRes);
+      setFoodLogs(foodLogsRes);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to load patient.");
     }
@@ -214,6 +219,7 @@ function PatientDetailView({ patientId }: { patientId: string }) {
             diagnoses={diagnoses ?? []}
             interventions={interventions ?? []}
             followUps={followUps}
+            foodLogs={foodLogs}
             onChanged={load}
           />
         </>

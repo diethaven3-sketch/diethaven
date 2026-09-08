@@ -12,6 +12,7 @@ import { AssessmentsModule } from "./assessments/assessments.module";
 import { DiagnosesModule } from "./diagnoses/diagnoses.module";
 import { InterventionsModule } from "./interventions/interventions.module";
 import { FollowUpsModule } from "./follow-ups/follow-ups.module";
+import { FoodLogsModule } from "./food-logs/food-logs.module";
 import { PatientModule } from "./patient/patient.module";
 import { JwtAuthGuard } from "./common/guards/jwt-auth.guard";
 import { RolesGuard } from "./common/guards/roles.guard";
@@ -33,6 +34,7 @@ import { RolesGuard } from "./common/guards/roles.guard";
     DiagnosesModule,
     InterventionsModule,
     FollowUpsModule,
+    FoodLogsModule,
     PatientModule,
   ],
   controllers: [HealthController],

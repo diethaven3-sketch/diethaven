@@ -135,6 +135,7 @@ model User {
   mealPlansAsPatient       MealPlan[]       @relation("PatientMealPlans")
   followUpsAsDietitian     FollowUp[]       @relation("DietitianFollowUps")
   followUpsAsPatient       FollowUp[]       @relation("PatientFollowUps")
+  foodLogs                 FoodLog[]
   auditLogs                AuditLog[]
   invitesSent              Invite[]         @relation("DietitianInvites")
 }
@@ -313,6 +314,38 @@ model FollowUp {
   @@index([dietitianId])
   @@index([diagnosisId])
   @@index([interventionId])
+}
+
+// A patient's own record of what they ate (guideline §4.2.5). Written by the
+// patient, read by them and their linked dietitian.
+//
+// No stored adherence flag: adherence is "% of plan followed", which is a
+// per-day aggregate against the prescribed meal plan, not a property of one
+// entry. It is computed on read — see `packages/types/src/food-log.ts`.
+model FoodLog {
+  id            String   @id @default(cuid())
+  patientId     String
+  patient       User     @relation(fields: [patientId], references: [id])
+  date          DateTime @default(now())
+  mealType      MealType
+  // Foods chosen from the exchange list, with their details copied in for the
+  // same reason meal plans copy them: [{ foodExchangeItemId, foodName,
+  // exchangeGroup, portionSize, exchanges }].
+  items         Json
+  // Free-text alternative for anything not in the exchange list.
+  description   String?
+  // Populated only if image upload is ever built; no storage provider is
+  // configured, so nothing writes to this yet.
+  photoUrl      String?
+  // Optional patient-side feedback, 1-5 scales.
+  hungerBefore  Int?
+  fullnessAfter Int?
+  symptoms      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([patientId])
+  @@index([patientId, date])
 }
 
 model AuditLog {
