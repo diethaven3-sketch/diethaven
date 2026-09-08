@@ -92,7 +92,7 @@ export default function AcceptInvite() {
         body: parsed.data,
       });
       await login(accessToken);
-      router.replace("/(app)/home");
+      router.replace("/(app)/(tabs)/home");
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
     } finally {

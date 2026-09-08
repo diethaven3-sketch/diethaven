@@ -32,7 +32,7 @@ export default function OtpVerify() {
         body: parsed.data,
       });
       await login(accessToken);
-      router.replace("/(app)/home");
+      router.replace("/(app)/(tabs)/home");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Invalid or expired code.");
     } finally {
