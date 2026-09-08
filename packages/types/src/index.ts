@@ -4,6 +4,7 @@ export * from "./assessments";
 export * from "./lab-ranges";
 export * from "./diagnosis";
 export * from "./intervention";
+export * from "./monitoring";
 export * from "./admin";
 export * from "./food-exchange";
 export * from "./audit";

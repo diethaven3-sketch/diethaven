@@ -1,0 +1,419 @@
+"use client";
+
+import { useMemo, useState, type FormEvent } from "react";
+import {
+  INTERVENTION_STATUS_LABELS,
+  OUTCOME_STATUS_LABELS,
+  anthropometricTrend,
+  followUpCreateSchema,
+  labTrends,
+  weightSummary,
+  type LabTrend,
+  type OutcomeStatus,
+} from "@repo/types";
+import { apiFetch, ApiError } from "../../lib/api-client";
+import { useAuth } from "../../lib/auth-context";
+import { Button } from "../ui/button";
+import { Banner } from "../ui/banner";
+import { Card } from "../ui/card";
+import { Badge } from "../ui/badge";
+import { SelectField } from "../ui/select";
+import { TextareaField } from "../ui/textarea";
+import { Table, Thead, Tbody, Th, Td } from "../ui/table";
+import type { AssessmentRow } from "../assessment/domain-history";
+import type { DiagnosisRow } from "../diagnosis/diagnosis-panel";
+import type { InterventionRow } from "../intervention/intervention-panel";
+
+export interface FollowUpRow {
+  id: string;
+  date: string;
+  outcome: OutcomeStatus;
+  notes: string;
+  diagnosis: { id: string; problemCode: string | null; problem: string; etiology: string } | null;
+  intervention: { id: string; carePlanDetails: string; status: string } | null;
+}
+
+const outcomeTone = {
+  RESOLVED: "success",
+  IMPROVED: "success",
+  UNCHANGED: "neutral",
+  WORSENED: "danger",
+} as const;
+
+const flagTone = { LOW: "warning", NORMAL: "success", HIGH: "danger" } as const;
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString();
+}
+
+function signed(value: number, unit: string) {
+  return `${value > 0 ? "+" : ""}${value} ${unit}`;
+}
+
+function LabTrendRow({ trend }: { trend: LabTrend }) {
+  return (
+    <tr>
+      <Td>{trend.label}</Td>
+      <Td>
+        {trend.latest.value} {trend.unit}
+      </Td>
+      <Td>
+        {trend.referenceLow}–{trend.referenceHigh} {trend.unit}
+      </Td>
+      <Td>{trend.change === null ? "—" : signed(trend.change, trend.unit)}</Td>
+      <Td>
+        <Badge tone={flagTone[trend.latest.flag]}>{trend.latest.flag}</Badge>
+      </Td>
+      <Td>
+        {/* The series behind the headline, so a single reading isn't read as a trend. */}
+        <span className="text-xs text-body">
+          {trend.points.map((point) => `${point.value} (${formatDate(point.date)})`).join(" → ")}
+        </span>
+      </Td>
+    </tr>
+  );
+}
+
+function ProgressReport({
+  patientName,
+  assessments,
+  diagnoses,
+  interventions,
+  followUps,
+}: {
+  patientName: string;
+  assessments: AssessmentRow[];
+  diagnoses: DiagnosisRow[];
+  interventions: InterventionRow[];
+  followUps: FollowUpRow[];
+}) {
+  const anthro = useMemo(() => anthropometricTrend(assessments), [assessments]);
+  const summary = useMemo(() => weightSummary(anthro), [anthro]);
+  const trends = useMemo(() => labTrends(assessments), [assessments]);
+  const latest = anthro[anthro.length - 1];
+  const abnormal = trends.filter((trend) => trend.latest.flag !== "NORMAL");
+
+  const hasAnything = anthro.length > 0 || trends.length > 0 || followUps.length > 0;
+  if (!hasAnything) {
+    return (
+      <Card>
+        <p className="text-sm text-body">
+          Nothing to report yet. Record anthropometric or laboratory assessments and the trends appear here.
+        </p>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="print-target print:border-0 print:shadow-none">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-bold text-heading">Progress report</h3>
+          <p className="text-sm text-body">
+            {patientName} · generated {new Date().toLocaleDateString()}
+          </p>
+        </div>
+        <Button variant="outline" className="print:hidden" onClick={() => window.print()}>
+          Print
+        </Button>
+      </div>
+
+      <section className="mt-5">
+        <h4 className="text-sm font-bold uppercase tracking-wide text-heading">Anthropometric</h4>
+        {latest ? (
+          <>
+            <p className="mt-1 text-sm text-body">
+              Latest: {latest.weight} kg · BMI {latest.bmi} ({formatDate(latest.date)})
+            </p>
+            {summary ? (
+              <p className="mt-1 text-sm text-body">
+                Change since {formatDate(summary.first.date)}: {signed(summary.weightChange, "kg")} ·{" "}
+                {signed(summary.bmiChange, "BMI")} across {anthro.length} measurements
+              </p>
+            ) : (
+              <p className="mt-1 text-sm text-body">
+                Only one measurement recorded, so there is no trend to report yet.
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="mt-1 text-sm text-body">No anthropometric measurements recorded.</p>
+        )}
+      </section>
+
+      <section className="mt-5">
+        <h4 className="text-sm font-bold uppercase tracking-wide text-heading">Biochemical</h4>
+        {trends.length === 0 ? (
+          <p className="mt-1 text-sm text-body">No laboratory results recorded.</p>
+        ) : (
+          <p className="mt-1 text-sm text-body">
+            {trends.length} {trends.length === 1 ? "marker" : "markers"} tracked,{" "}
+            {abnormal.length === 0
+              ? "all currently within their reference ranges"
+              : `${abnormal.length} currently outside range: ${abnormal.map((t) => t.label).join(", ")}`}
+            .
+          </p>
+        )}
+      </section>
+
+      <section className="mt-5">
+        <h4 className="text-sm font-bold uppercase tracking-wide text-heading">Care history</h4>
+        <p className="mt-1 text-sm text-body">
+          {diagnoses.length} {diagnoses.length === 1 ? "diagnosis" : "diagnoses"} ·{" "}
+          {interventions.filter((i) => i.status === "ACTIVE").length} active{" "}
+          {interventions.length === 1 ? "intervention" : "interventions"} · {followUps.length} follow-up{" "}
+          {followUps.length === 1 ? "visit" : "visits"}
+        </p>
+        {followUps[0] ? (
+          <p className="mt-1 text-sm text-body">
+            Most recent outcome: {OUTCOME_STATUS_LABELS[followUps[0].outcome]} ({formatDate(followUps[0].date)})
+          </p>
+        ) : null}
+      </section>
+
+      <p className="mt-5 border-t border-gray-200 pt-3 text-xs text-body">
+        Summarised from data recorded in DietHaven Consult. Dietary adherence is not included — daily food logging is
+        not built yet, so no adherence figure would be based on real data.
+      </p>
+    </Card>
+  );
+}
+
+function FollowUpForm({
+  patientId,
+  diagnoses,
+  interventions,
+  onSaved,
+}: {
+  patientId: string;
+  diagnoses: DiagnosisRow[];
+  interventions: InterventionRow[];
+  onSaved: () => void;
+}) {
+  const { token } = useAuth();
+  const [diagnosisId, setDiagnosisId] = useState("");
+  const [interventionId, setInterventionId] = useState("");
+  const [outcome, setOutcome] = useState<OutcomeStatus>("IMPROVED");
+  const [notes, setNotes] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const onSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    setError(null);
+
+    const parsed = followUpCreateSchema.safeParse({
+      patientId,
+      ...(diagnosisId ? { diagnosisId } : {}),
+      ...(interventionId ? { interventionId } : {}),
+      outcome,
+      notes,
+    });
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? "Check the form and retry.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await apiFetch("/follow-ups", { method: "POST", token, body: parsed.data });
+      setDiagnosisId("");
+      setInterventionId("");
+      setNotes("");
+      onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to save the follow-up.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (diagnoses.length === 0 && interventions.length === 0) {
+    return (
+      <Card>
+        <h3 className="text-lg font-bold text-heading">Follow-up visit</h3>
+        <p className="mt-1 text-sm text-body">
+          A follow-up reviews a diagnosis or an intervention, so record one of those before documenting a visit.
+        </p>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <h3 className="text-lg font-bold text-heading">Document a follow-up visit</h3>
+      <p className="mt-1 text-sm text-body">
+        Record how the patient responded to what was diagnosed or prescribed.
+      </p>
+
+      <form className="mt-4 flex flex-col gap-4" onSubmit={onSubmit} noValidate>
+        {error ? <Banner tone="danger">{error}</Banner> : null}
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <SelectField
+            label="Diagnosis reviewed"
+            name="diagnosisId"
+            value={diagnosisId}
+            onChange={(e) => setDiagnosisId(e.target.value)}
+          >
+            <option value="">None</option>
+            {diagnoses.map((diagnosis) => (
+              <option key={diagnosis.id} value={diagnosis.id}>
+                {diagnosis.problemCode ? `${diagnosis.problemCode} · ` : ""}
+                {diagnosis.problem}
+              </option>
+            ))}
+          </SelectField>
+
+          <SelectField
+            label="Intervention reviewed"
+            name="interventionId"
+            value={interventionId}
+            onChange={(e) => setInterventionId(e.target.value)}
+          >
+            <option value="">None</option>
+            {interventions.map((intervention) => (
+              <option key={intervention.id} value={intervention.id}>
+                {intervention.diagnosis.problem} — {INTERVENTION_STATUS_LABELS[intervention.status]}
+              </option>
+            ))}
+          </SelectField>
+        </div>
+
+        <SelectField
+          label="Outcome"
+          name="outcome"
+          value={outcome}
+          onChange={(e) => setOutcome(e.target.value as OutcomeStatus)}
+          className="sm:max-w-xs"
+        >
+          {(Object.keys(OUTCOME_STATUS_LABELS) as OutcomeStatus[]).map((value) => (
+            <option key={value} value={value}>
+              {OUTCOME_STATUS_LABELS[value]}
+            </option>
+          ))}
+        </SelectField>
+
+        <TextareaField
+          label="Visit notes"
+          name="notes"
+          rows={4}
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          hint="What changed, what the patient reported, and what happens next."
+          required
+        />
+
+        <Button type="submit" loading={submitting} className="self-start">
+          Save follow-up
+        </Button>
+      </form>
+    </Card>
+  );
+}
+
+export function MonitoringPanel({
+  patientId,
+  patientName,
+  assessments,
+  diagnoses,
+  interventions,
+  followUps,
+  onChanged,
+}: {
+  patientId: string;
+  patientName: string;
+  assessments: AssessmentRow[];
+  diagnoses: DiagnosisRow[];
+  interventions: InterventionRow[];
+  followUps: FollowUpRow[] | null;
+  onChanged: () => void;
+}) {
+  const trends = useMemo(() => labTrends(assessments), [assessments]);
+  const visits = followUps ?? [];
+
+  return (
+    <div className="flex flex-col gap-6">
+      <ProgressReport
+        patientName={patientName}
+        assessments={assessments}
+        diagnoses={diagnoses}
+        interventions={interventions}
+        followUps={visits}
+      />
+
+      <div className="print:hidden">
+        <h3 className="text-lg font-bold text-heading">Laboratory trends</h3>
+        <p className="mt-1 text-sm text-body">
+          Each marker across every recorded panel, compared against its reference range.
+        </p>
+        <Card className="mt-3 p-0">
+          {trends.length === 0 ? (
+            <p className="p-6 text-sm text-body">
+              No laboratory results yet. Record a biochemical assessment and trends build up here across visits.
+            </p>
+          ) : (
+            <Table>
+              <Thead>
+                <tr>
+                  <Th>Marker</Th>
+                  <Th>Latest</Th>
+                  <Th>Reference</Th>
+                  <Th>Change</Th>
+                  <Th>Flag</Th>
+                  <Th>Series</Th>
+                </tr>
+              </Thead>
+              <Tbody>
+                {trends.map((trend) => (
+                  <LabTrendRow key={trend.marker} trend={trend} />
+                ))}
+              </Tbody>
+            </Table>
+          )}
+        </Card>
+      </div>
+
+      <div className="print:hidden">
+        <FollowUpForm
+          patientId={patientId}
+          diagnoses={diagnoses}
+          interventions={interventions}
+          onSaved={onChanged}
+        />
+      </div>
+
+      <div className="print:hidden">
+        <h3 className="text-lg font-bold text-heading">Follow-up history</h3>
+        <div className="mt-3 flex flex-col gap-4">
+          {followUps === null ? (
+            <p className="text-sm text-body">Loading…</p>
+          ) : visits.length === 0 ? (
+            <Card>
+              <p className="text-sm text-body">No follow-up visits documented yet.</p>
+            </Card>
+          ) : (
+            visits.map((visit) => (
+              <Card key={visit.id}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Badge tone={outcomeTone[visit.outcome]}>{OUTCOME_STATUS_LABELS[visit.outcome]}</Badge>
+                  <p className="text-xs text-body">{formatDate(visit.date)}</p>
+                </div>
+                {visit.diagnosis ? (
+                  <p className="mt-2 text-sm text-heading">
+                    Reviewing: {visit.diagnosis.problemCode ? `${visit.diagnosis.problemCode} · ` : ""}
+                    {visit.diagnosis.problem}
+                  </p>
+                ) : null}
+                {visit.intervention ? (
+                  <p className="mt-0.5 text-sm text-body">Intervention: {visit.intervention.carePlanDetails}</p>
+                ) : null}
+                <p className="mt-2 whitespace-pre-wrap text-sm text-body">{visit.notes}</p>
+              </Card>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -72,6 +72,14 @@ enum DiagnosisStatus {
   RULED_OUT
 }
 
+// Outcome recorded at a follow-up visit (guideline §4.2.4's own wording).
+enum OutcomeStatus {
+  RESOLVED
+  IMPROVED
+  UNCHANGED
+  WORSENED
+}
+
 enum InterventionStatus {
   DRAFT
   ACTIVE
@@ -125,6 +133,8 @@ model User {
   interventionsAsPatient   Intervention[]   @relation("PatientInterventions")
   mealPlansAsDietitian     MealPlan[]       @relation("DietitianMealPlans")
   mealPlansAsPatient       MealPlan[]       @relation("PatientMealPlans")
+  followUpsAsDietitian     FollowUp[]       @relation("DietitianFollowUps")
+  followUpsAsPatient       FollowUp[]       @relation("PatientFollowUps")
   auditLogs                AuditLog[]
   invitesSent              Invite[]         @relation("DietitianInvites")
 }
@@ -209,6 +219,7 @@ model Diagnosis {
   updatedAt     DateTime        @updatedAt
 
   interventions Intervention[]
+  followUps     FollowUp[]
 
   @@index([patientId])
   @@index([dietitianId])
@@ -264,9 +275,44 @@ model Intervention {
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
+  followUps FollowUp[]
+
   @@index([patientId])
   @@index([dietitianId])
   @@index([diagnosisId])
+}
+
+// Structured note for one follow-up visit, recording how the patient responded
+// to a prior diagnosis or intervention (guideline §4.2.4).
+//
+// Weight, BMI and lab values are deliberately NOT duplicated here. The
+// guideline sketches a MonitoringEntry carrying them, but Assessment already
+// holds that data as a dated, domain-tagged series — ANTHROPOMETRIC rows for
+// weight/BMI, BIOCHEMICAL rows for labs. A second home would fork the source of
+// truth, so trends are derived from Assessment and this model carries only what
+// is genuinely new: the visit's outcome and narrative.
+model FollowUp {
+  id             String        @id @default(cuid())
+  patientId      String
+  patient        User          @relation("PatientFollowUps", fields: [patientId], references: [id])
+  dietitianId    String
+  dietitian      User          @relation("DietitianFollowUps", fields: [dietitianId], references: [id])
+  date           DateTime      @default(now())
+  // What this visit was reviewing. Both nullable and both allowed together: a
+  // visit may review a diagnosis, the intervention answering it, or both.
+  diagnosisId    String?
+  diagnosis      Diagnosis?    @relation(fields: [diagnosisId], references: [id])
+  interventionId String?
+  intervention   Intervention? @relation(fields: [interventionId], references: [id])
+  outcome        OutcomeStatus
+  notes          String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([patientId])
+  @@index([dietitianId])
+  @@index([diagnosisId])
+  @@index([interventionId])
 }
 
 model AuditLog {

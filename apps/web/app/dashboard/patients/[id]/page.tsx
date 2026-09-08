@@ -15,6 +15,7 @@ import {
   InterventionPanel,
   type InterventionRow,
 } from "../../../../components/intervention/intervention-panel";
+import { MonitoringPanel, type FollowUpRow } from "../../../../components/monitoring/monitoring-panel";
 
 interface PatientDetail {
   userId: string;
@@ -23,14 +24,14 @@ interface PatientDetail {
   user: { name: string; email: string };
 }
 
-// The IDNT stages in the order the guideline sequences them. Monitoring &
-// Evaluation is Phase 3 and not built yet.
-type Stage = "ASSESSMENT" | "DIAGNOSIS" | "INTERVENTION";
+// The four IDNT stages, in the order the guideline sequences them.
+type Stage = "ASSESSMENT" | "DIAGNOSIS" | "INTERVENTION" | "MONITORING";
 
 const STAGE_LABELS: Record<Stage, string> = {
   ASSESSMENT: "Assessment",
   DIAGNOSIS: "Diagnosis",
   INTERVENTION: "Intervention",
+  MONITORING: "Monitoring",
 };
 
 function TabBar<T extends string>({
@@ -83,22 +84,25 @@ function PatientDetailView({ patientId }: { patientId: string }) {
   const [assessments, setAssessments] = useState<AssessmentRow[] | null>(null);
   const [diagnoses, setDiagnoses] = useState<DiagnosisRow[] | null>(null);
   const [interventions, setInterventions] = useState<InterventionRow[] | null>(null);
+  const [followUps, setFollowUps] = useState<FollowUpRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stage, setStage] = useState<Stage>("ASSESSMENT");
   const [activeDomain, setActiveDomain] = useState<AssessmentDomain>("PATIENT_HISTORY");
 
   const load = useCallback(async () => {
     try {
-      const [patientRes, assessmentsRes, diagnosesRes, interventionsRes] = await Promise.all([
+      const [patientRes, assessmentsRes, diagnosesRes, interventionsRes, followUpsRes] = await Promise.all([
         apiFetch<PatientDetail>(`/dietitian/patients/${patientId}`, { token }),
         apiFetch<AssessmentRow[]>(`/assessments?patientId=${patientId}`, { token }),
         apiFetch<DiagnosisRow[]>(`/diagnoses?patientId=${patientId}`, { token }),
         apiFetch<InterventionRow[]>(`/interventions?patientId=${patientId}`, { token }),
+        apiFetch<FollowUpRow[]>(`/follow-ups?patientId=${patientId}`, { token }),
       ]);
       setPatient(patientRes);
       setAssessments(assessmentsRes);
       setDiagnoses(diagnosesRes);
       setInterventions(interventionsRes);
+      setFollowUps(followUpsRes);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to load patient.");
     }
@@ -117,6 +121,7 @@ function PatientDetailView({ patientId }: { patientId: string }) {
     ASSESSMENT: rows.length,
     DIAGNOSIS: diagnoses?.length ?? 0,
     INTERVENTION: interventions?.length ?? 0,
+    MONITORING: followUps?.length ?? 0,
   };
   const ActiveForm = DOMAIN_FORMS[activeDomain];
 
@@ -136,7 +141,7 @@ function PatientDetailView({ patientId }: { patientId: string }) {
 
       <TabBar
         ariaLabel="Nutrition Care Process stage"
-        items={["ASSESSMENT", "DIAGNOSIS", "INTERVENTION"]}
+        items={["ASSESSMENT", "DIAGNOSIS", "INTERVENTION", "MONITORING"]}
         labels={STAGE_LABELS}
         counts={stageCounts}
         active={stage}
@@ -182,7 +187,7 @@ function PatientDetailView({ patientId }: { patientId: string }) {
           </p>
           <DiagnosisPanel patientId={patientId} assessments={rows} diagnoses={diagnoses} onChanged={load} />
         </>
-      ) : (
+      ) : stage === "INTERVENTION" ? (
         <>
           <h2 className="mt-6 text-xl font-bold text-heading print:hidden">Nutrition intervention</h2>
           <p className="mt-1 mb-6 text-sm text-body print:hidden">
@@ -193,6 +198,22 @@ function PatientDetailView({ patientId }: { patientId: string }) {
             patientName={patient?.user.name ?? "Patient"}
             diagnoses={diagnoses ?? []}
             interventions={interventions}
+            onChanged={load}
+          />
+        </>
+      ) : (
+        <>
+          <h2 className="mt-6 text-xl font-bold text-heading print:hidden">Monitoring &amp; evaluation</h2>
+          <p className="mt-1 mb-6 text-sm text-body print:hidden">
+            Weight, BMI and laboratory trends across visits, with follow-up documentation.
+          </p>
+          <MonitoringPanel
+            patientId={patientId}
+            patientName={patient?.user.name ?? "Patient"}
+            assessments={rows}
+            diagnoses={diagnoses ?? []}
+            interventions={interventions ?? []}
+            followUps={followUps}
             onChanged={load}
           />
         </>
