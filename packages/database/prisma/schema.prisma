@@ -59,6 +59,19 @@ enum InviteStatus {
   EXPIRED
 }
 
+// The three IDNT nutrition-diagnosis domains (guideline §4.2.2).
+enum DiagnosisDomain {
+  INTAKE
+  CLINICAL
+  BEHAVIORAL_ENVIRONMENTAL
+}
+
+enum DiagnosisStatus {
+  ACTIVE
+  RESOLVED
+  RULED_OUT
+}
+
 // Nigerian Food Exchange List groups (guideline §4.2.3's own examples).
 enum ExchangeGroup {
   STARCHES
@@ -70,19 +83,19 @@ enum ExchangeGroup {
 }
 
 model User {
-  id           String     @id @default(cuid())
-  role         Role
-  name         String
-  email        String     @unique
-  phone        String?
-  passwordHash String
-  status       UserStatus @default(ACTIVE)
-  otpHash      String?
-  otpExpiresAt DateTime?
+  id                     String     @id @default(cuid())
+  role                   Role
+  name                   String
+  email                  String     @unique
+  phone                  String?
+  passwordHash           String
+  status                 UserStatus @default(ACTIVE)
+  otpHash                String?
+  otpExpiresAt           DateTime?
   resetPasswordHash      String?
   resetPasswordExpiresAt DateTime?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
 
   dietitianProfile DietitianProfile?
   patientProfile   PatientProfile?
@@ -90,20 +103,22 @@ model User {
   patientsAsDietitian    PatientProfile[] @relation("DietitianPatients")
   assessmentsAsDietitian Assessment[]     @relation("DietitianAssessments")
   assessmentsAsPatient   Assessment[]     @relation("PatientAssessments")
+  diagnosesAsDietitian   Diagnosis[]      @relation("DietitianDiagnoses")
+  diagnosesAsPatient     Diagnosis[]      @relation("PatientDiagnoses")
   auditLogs              AuditLog[]
   invitesSent            Invite[]         @relation("DietitianInvites")
 }
 
 model DietitianProfile {
-  id             String                   @id @default(cuid())
-  userId         String                   @unique
-  user           User                     @relation(fields: [userId], references: [id])
+  id             String                  @id @default(cuid())
+  userId         String                  @unique
+  user           User                    @relation(fields: [userId], references: [id])
   licenseNumber  String
   specialty      String
   facility       String
-  approvalStatus DietitianApprovalStatus  @default(PENDING)
-  createdAt      DateTime                 @default(now())
-  updatedAt      DateTime                 @updatedAt
+  approvalStatus DietitianApprovalStatus @default(PENDING)
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
 }
 
 model PatientProfile {
@@ -137,8 +152,45 @@ model Assessment {
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
+  diagnoses Diagnosis[]
+
   @@index([patientId])
   @@index([dietitianId])
+}
+
+// An IDNT PES statement: Problem (diagnostic label) related to Etiology, as
+// evidenced by Signs/Symptoms drawn from the assessment (guideline §4.2.2).
+model Diagnosis {
+  id            String          @id @default(cuid())
+  patientId     String
+  patient       User            @relation("PatientDiagnoses", fields: [patientId], references: [id])
+  dietitianId   String
+  dietitian     User            @relation("DietitianDiagnoses", fields: [dietitianId], references: [id])
+  // The assessment this diagnosis was drawn from. Nullable so a diagnosis is
+  // never lost if it predates a linked assessment record.
+  assessmentId  String?
+  assessment    Assessment?     @relation(fields: [assessmentId], references: [id])
+  domain        DiagnosisDomain
+  // Code from the curated IDNT library, or null when the problem is free-text.
+  problemCode   String?
+  problem       String
+  etiology      String
+  signsSymptoms String
+  // Which assessment fields served as the signs/symptoms evidence, for
+  // traceability: [{ assessmentId, domain, field, label, value }].
+  evidence      Json
+  status        DiagnosisStatus @default(ACTIVE)
+  // Always false today — there are no AI features. The column exists because
+  // the guideline's entity list defines it, so the Phase 4 AI layer won't need
+  // a migration. Nothing in the UI may present a diagnosis as AI-generated
+  // while this is false.
+  aiGenerated   Boolean         @default(false)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([patientId])
+  @@index([dietitianId])
+  @@index([assessmentId])
 }
 
 model AuditLog {

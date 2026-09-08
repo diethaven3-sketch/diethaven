@@ -9,6 +9,7 @@ import { AdminModule } from "./admin/admin.module";
 import { DietitianModule } from "./dietitian/dietitian.module";
 import { InvitesModule } from "./invites/invites.module";
 import { AssessmentsModule } from "./assessments/assessments.module";
+import { DiagnosesModule } from "./diagnoses/diagnoses.module";
 import { PatientModule } from "./patient/patient.module";
 import { JwtAuthGuard } from "./common/guards/jwt-auth.guard";
 import { RolesGuard } from "./common/guards/roles.guard";
@@ -27,6 +28,7 @@ import { RolesGuard } from "./common/guards/roles.guard";
     DietitianModule,
     InvitesModule,
     AssessmentsModule,
+    DiagnosesModule,
     PatientModule,
   ],
   controllers: [HealthController],
