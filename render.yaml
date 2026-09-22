@@ -4,16 +4,24 @@ services:
     runtime: node
     plan: free
     region: oregon
-    buildCommand: bun install && bun run build && bun x prisma migrate deploy --schema=packages/database/prisma/schema.prisma
+    # Build only the API and its workspace deps (database, types) — a plain
+    # `bun run build` would also build web and mobile. Migrations run here
+    # because preDeployCommand isn't available on the free plan.
+    buildCommand: bun install --frozen-lockfile && bun x turbo run build --filter=api && cd packages/database && bun run db:deploy
     startCommand: node apps/api/dist/main.js
     healthCheckPath: /health
     envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: BUN_VERSION
+        value: 1.4.2
       - key: NODE_ENV
         value: production
+      # Managed Postgres (e.g. Neon) with encryption at rest — see CLAUDE.md §8.
+      # Use the direct (non "-pooler") connection string so `prisma migrate
+      # deploy` can take its advisory lock.
       - key: DATABASE_URL
-        fromDatabase:
-          name: diethaven-db
-          property: connectionString
+        sync: false
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_EXPIRES_IN
@@ -24,10 +32,3 @@ services:
         value: DietHaven Consult <onboarding@resend.dev>
       - key: WEB_ORIGIN
         value: http://localhost:3000
-
-databases:
-  - name: diethaven-db
-    databaseName: diethaven
-    user: diethaven_user
-    plan: free
-    region: oregon
