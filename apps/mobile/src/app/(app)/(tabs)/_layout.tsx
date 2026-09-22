@@ -7,10 +7,25 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.secondaryDark,
-        tabBarInactiveTintColor: "#6B7280",
-        tabBarLabelStyle: { fontFamily: "NotoSans_500Medium", fontSize: 12 },
-        tabBarStyle: { backgroundColor: "#FFFFFF", borderTopColor: "#E5E7EB" },
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textMuted,
+        tabBarLabelStyle: { fontFamily: "NotoSans_500Medium", fontSize: 10, marginTop: 2 },
+        tabBarItemStyle: { paddingVertical: 6 },
+        tabBarStyle: {
+          position: "absolute",
+          left: 16,
+          right: 16,
+          bottom: 16,
+          height: 64,
+          borderRadius: 999,
+          borderTopWidth: 0,
+          backgroundColor: "rgba(255,255,255,0.95)",
+          shadowColor: "#000000",
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.13,
+          shadowRadius: 16,
+          elevation: 8,
+        },
       }}
     >
       <Tabs.Screen

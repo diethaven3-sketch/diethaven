@@ -1,34 +1,49 @@
+import type { ReactNode } from "react";
 import { router } from "expo-router";
-import { Alert, RefreshControl, ScrollView, Text } from "react-native";
+import { Cake, FileText, KeyRound, LogOut, Pencil, Phone, ShieldCheck, Venus } from "lucide-react-native";
+import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { KeyRound, Pencil, Stethoscope } from "lucide-react-native";
 import { colors } from "@repo/ui-tokens";
 import { useAuth } from "@/lib/auth-context";
 import { useApiQuery } from "@/lib/use-api";
 import {
   formatDate,
   sexLabel,
+  type LinkedDietitian,
   type PatientClinicalProfile,
   type PatientProfile,
 } from "@/lib/patient-data";
-import { AppHeader } from "@/components/app-header";
-import { Card } from "@/components/ui/card";
+import { DietitianCard } from "@/components/dietitian-card";
 import { Banner } from "@/components/ui/banner";
-import { Button } from "@/components/ui/button";
-import { DetailRow } from "@/components/ui/detail-row";
 import { LinkRow } from "@/components/ui/link-row";
 import { LoadingState } from "@/components/ui/states";
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  return ((parts[0]?.[0] ?? "") + (parts[parts.length - 1]?.[0] ?? "")).toUpperCase();
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <View className="gap-1.5">
+      <Text className="font-body-medium text-xs uppercase tracking-wide text-muted">{title}</Text>
+      <View className="rounded-[22px] border border-gray-200 bg-white px-4">{children}</View>
+    </View>
+  );
+}
 
 export default function Profile() {
   const { logout } = useAuth();
   const account = useApiQuery<PatientProfile>("/auth/profile");
   const clinical = useApiQuery<PatientClinicalProfile>("/patient/profile");
+  const dietitian = useApiQuery<LinkedDietitian | null>("/patient/dietitian");
 
   const loading = account.loading || clinical.loading;
-  const refreshing = account.refreshing || clinical.refreshing;
+  const refreshing = account.refreshing || clinical.refreshing || dietitian.refreshing;
   const onRefresh = () => {
     account.refetch();
     clinical.refetch();
+    dietitian.refetch();
   };
 
   const onLogout = () => {
@@ -47,89 +62,98 @@ export default function Profile() {
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
-      <AppHeader title="Profile" />
-
       <ScrollView
-        contentContainerClassName="gap-5 px-6 py-6"
+        contentContainerClassName="gap-5 px-5 pb-28 pt-4"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
+        <Text className="font-heading-bold text-xl text-heading">Profile</Text>
+
         {loading ? (
           <LoadingState />
         ) : account.error ? (
           <Banner tone="danger">{account.error}</Banner>
         ) : account.data ? (
           <>
-            <Card>
-              <Text className="font-heading-bold text-xl text-heading">{account.data.name}</Text>
-              <Text className="font-body text-sm text-body">{account.data.email}</Text>
-            </Card>
-
-            <Card>
-              <Text className="mb-1 font-heading text-base text-heading">Account</Text>
-              <DetailRow label="Full name" value={account.data.name} />
-              <DetailRow label="Email" value={account.data.email} />
-              <DetailRow label="Phone" value={account.data.phone} />
-              <DetailRow label="Member since" value={formatDate(account.data.createdAt)} last />
-            </Card>
-
-            <Card>
-              <Text className="mb-1 font-heading text-base text-heading">Personal details</Text>
-              {clinical.error ? (
-                <Banner tone="danger">{clinical.error}</Banner>
-              ) : clinical.data ? (
-                <>
-                  <DetailRow label="Date of birth" value={formatDate(clinical.data.dateOfBirth)} />
-                  <DetailRow label="Sex" value={sexLabel(clinical.data.sex)} />
-                  <DetailRow label="Contact address" value={clinical.data.contact} last />
-                </>
-              ) : null}
-            </Card>
-
-            <Card flush className="px-5">
-              <LinkRow
-                label="Edit profile"
-                description="Update your name, phone, or personal details"
-                icon={Pencil}
+            <View className="flex-row items-center gap-3.5 rounded-[22px] border border-gray-200 bg-white p-4">
+              <View className="h-14 w-14 items-center justify-center rounded-full bg-surface-alt">
+                <Text className="font-heading-bold text-lg text-primary-dark">{initials(account.data.name)}</Text>
+              </View>
+              <View className="flex-1 gap-0.5">
+                <Text className="font-heading-bold text-base text-heading">{account.data.name}</Text>
+                <Text className="font-body text-xs text-muted">{account.data.email}</Text>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Edit profile"
                 onPress={() => router.push("/(app)/edit-profile")}
+                className="h-8 w-8 items-center justify-center rounded-full bg-surface-alt active:opacity-60"
+              >
+                <Pencil size={14} color={colors.primaryDark} />
+              </Pressable>
+            </View>
+
+            {dietitian.data ? (
+              <DietitianCard name={dietitian.data.name} onPress={() => router.push("/(app)/dietitian")} />
+            ) : null}
+
+            {clinical.data ? (
+              <Section title="Personal information">
+                <LinkRow
+                  label="Phone number"
+                  value={account.data.phone ?? "Not provided"}
+                  icon={Phone}
+                  onPress={() => router.push("/(app)/edit-profile")}
+                />
+                <LinkRow
+                  label="Date of birth"
+                  value={formatDate(clinical.data.dateOfBirth)}
+                  icon={Cake}
+                  onPress={() => router.push("/(app)/edit-profile")}
+                />
+                <LinkRow
+                  label="Sex"
+                  value={sexLabel(clinical.data.sex)}
+                  icon={Venus}
+                  onPress={() => router.push("/(app)/edit-profile")}
+                  last
+                />
+              </Section>
+            ) : null}
+
+            <Section title="Privacy">
+              {clinical.data ? (
+                <LinkRow
+                  label="Data consent"
+                  value={
+                    clinical.data.consentStatus
+                      ? clinical.data.consentGivenAt
+                        ? `Given · ${formatDate(clinical.data.consentGivenAt)}`
+                        : "Given"
+                      : "Not on record"
+                  }
+                  icon={ShieldCheck}
+                  onPress={() => {}}
+                  chevron={false}
+                />
+              ) : null}
+              <LinkRow
+                label="Privacy policy"
+                icon={FileText}
+                onPress={() => router.push("/(app)/privacy-policy")}
+                last
               />
+            </Section>
+
+            <Section title="Account">
               <LinkRow
                 label="Change password"
                 icon={KeyRound}
                 onPress={() => router.push("/(app)/change-password")}
               />
-              <LinkRow
-                label="Your dietitian"
-                icon={Stethoscope}
-                onPress={() => router.push("/(app)/dietitian")}
-                last
-              />
-            </Card>
+              <LinkRow label="Log out" icon={LogOut} onPress={onLogout} tone="danger" chevron={false} last />
+            </Section>
 
-            <Card>
-              <Text className="mb-1 font-heading text-base text-heading">Consent &amp; your data</Text>
-              {clinical.data ? (
-                <DetailRow
-                  label="Consent given"
-                  value={
-                    clinical.data.consentStatus
-                      ? clinical.data.consentGivenAt
-                        ? formatDate(clinical.data.consentGivenAt)
-                        : "Yes"
-                      : "Not on record"
-                  }
-                  last
-                />
-              ) : null}
-              <Text className="mt-2 font-body text-sm text-body">
-                You consented to DietHaven Consult processing your health data for your nutrition care under the NDPA
-                2023. Only you and your linked dietitian can see your clinical records, and every access is logged. To
-                withdraw consent, contact your dietitian.
-              </Text>
-            </Card>
-
-            <Button variant="outline" onPress={onLogout}>
-              Log out
-            </Button>
+            <Text className="text-center font-body text-[11px] text-muted">DietHaven Consult · v1.0</Text>
           </>
         ) : null}
       </ScrollView>

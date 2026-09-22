@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { router } from "expo-router";
-import { Text } from "react-native";
+import { Link, router } from "expo-router";
+import { ArrowLeft } from "lucide-react-native";
+import { Pressable, Text, View } from "react-native";
 import { otpRequestSchema } from "@repo/types";
+import { colors } from "@repo/ui-tokens";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { Screen } from "@/components/screen";
 import { Button } from "@/components/ui/button";
@@ -37,8 +39,22 @@ export default function OtpLogin() {
 
   return (
     <Screen>
-      <Text className="font-heading-bold text-2xl text-heading">Log in with a code</Text>
-      <Text className="font-body text-sm text-body">We&apos;ll send a one-time code to your email.</Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        onPress={() => router.back()}
+        className="-mb-2 self-start"
+      >
+        <ArrowLeft size={22} color={colors.textBody} />
+      </Pressable>
+
+      <View className="gap-1.5">
+        <Text className="font-heading-bold text-2xl text-heading">Log in with email</Text>
+        <Text className="font-body text-sm text-muted">
+          We&apos;ll email you a one-time code — no password needed
+        </Text>
+      </View>
 
       {error ? <Banner tone="danger">{error}</Banner> : null}
 
@@ -46,6 +62,7 @@ export default function OtpLogin() {
         label="Email"
         value={email}
         onChangeText={setEmail}
+        placeholder="you@example.com"
         keyboardType="email-address"
         autoCapitalize="none"
         autoCorrect={false}
@@ -54,6 +71,17 @@ export default function OtpLogin() {
       <Button onPress={onSubmit} loading={submitting}>
         Send code
       </Button>
+
+      <View className="flex-row items-center justify-center gap-1">
+        <Text className="font-body text-[13px] text-muted">New patient?</Text>
+        <Link href="/(auth)/register" className="font-body-medium text-[13px] text-primary">
+          Create an account
+        </Link>
+      </View>
+
+      <Link href="/(auth)/login" className="text-center font-body-medium text-[13px] text-primary">
+        Log in with a password instead
+      </Link>
     </Screen>
   );
 }

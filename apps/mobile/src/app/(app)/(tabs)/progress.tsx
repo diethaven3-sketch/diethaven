@@ -1,3 +1,4 @@
+import { Lock } from "lucide-react-native";
 import { RefreshControl, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "@repo/ui-tokens";
@@ -9,9 +10,9 @@ import {
   weightChange,
   type AnthropometricAssessment,
 } from "@/lib/patient-data";
-import { AppHeader } from "@/components/app-header";
-import { Card } from "@/components/ui/card";
 import { Banner } from "@/components/ui/banner";
+import { Card } from "@/components/ui/card";
+import { Note } from "@/components/ui/note";
 import { EmptyState, LoadingState } from "@/components/ui/states";
 import { WeightTrendChart } from "@/components/weight-trend-chart";
 
@@ -38,12 +39,12 @@ export default function Progress() {
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
-      <AppHeader title="Progress" subtitle="Weight and BMI history" />
-
       <ScrollView
-        contentContainerClassName="gap-5 px-6 py-6"
+        contentContainerClassName="gap-4 px-5 pb-28 pt-4"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refetch} tintColor={colors.primary} />}
       >
+        <Text className="font-heading-bold text-xl text-heading">Progress</Text>
+
         {loading ? (
           <LoadingState />
         ) : error ? (
@@ -55,34 +56,31 @@ export default function Progress() {
           />
         ) : (
           <>
-            <Banner tone="info">
-              These measurements are recorded by your dietitian during your visits. You can view them, but only your
-              dietitian can change them.
-            </Banner>
+            <Note icon={Lock}>Recorded by your dietitian at each visit — view only.</Note>
 
-            <Card className="gap-4">
+            <View className="gap-4 rounded-[22px] border border-gray-200 bg-white p-4">
               <View className="flex-row gap-4">
                 <View className="flex-1">
-                  <Text className="font-body text-xs uppercase tracking-wide text-body">Current weight</Text>
+                  <Text className="font-body text-xs text-muted">Current weight</Text>
                   <Text className="font-heading-bold text-2xl text-heading">
                     {latest.domainData.weight.toFixed(1)} kg
                   </Text>
                 </View>
                 <View className="flex-1">
-                  <Text className="font-body text-xs uppercase tracking-wide text-body">Current BMI</Text>
+                  <Text className="font-body text-xs text-muted">Current BMI</Text>
                   <Text className="font-heading-bold text-2xl text-heading">{latest.domainData.bmi.toFixed(1)}</Text>
-                  <Text className="font-body text-xs text-body">{bmiCategory(latest.domainData.bmi)}</Text>
+                  <Text className="font-body text-xs text-muted">{bmiCategory(latest.domainData.bmi)}</Text>
                 </View>
               </View>
               {change !== null ? (
                 <Text className="font-body-medium text-sm text-primary-dark">{formatWeightChange(change)}</Text>
               ) : null}
-            </Card>
+            </View>
 
-            <Card>
-              <Text className="mb-3 font-heading text-base text-heading">Weight trend</Text>
+            <View className="gap-3 rounded-[22px] border border-gray-200 bg-white p-4">
+              <Text className="font-heading-bold text-base text-heading">Weight trend</Text>
               <WeightTrendChart assessments={assessments} />
-            </Card>
+            </View>
 
             <Card>
               <Text className="font-heading text-base text-heading">All measurements</Text>

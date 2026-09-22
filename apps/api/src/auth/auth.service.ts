@@ -14,6 +14,7 @@ import type {
 } from "@repo/types";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
+import { EmailService } from "../email/email.service";
 
 const OTP_TTL_MS = 5 * 60 * 1000;
 const RESET_PASSWORD_TTL_MS = 15 * 60 * 1000;
@@ -27,6 +28,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly audit: AuditService,
+    private readonly emailService: EmailService,
   ) {}
 
   private signToken(user: { id: string; role: string; email: string }) {
@@ -146,6 +148,11 @@ export class AuthService {
 
     this.logger.log(`OTP for ${user.email}: ${code}`);
 
+    await this.emailService.sendOtp({
+      to: user.email,
+      code,
+    });
+
     return {
       message: "If that account exists, an OTP has been sent",
       ...(process.env.NODE_ENV === "development" ? { devOtp: code } : {}),
@@ -207,6 +214,11 @@ export class AuthService {
     });
 
     this.logger.log(`Password reset code for ${user.email}: ${code}`);
+
+    await this.emailService.sendPasswordReset({
+      to: user.email,
+      code,
+    });
 
     return {
       message: "If that account exists, a reset code has been sent",

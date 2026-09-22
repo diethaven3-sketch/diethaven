@@ -5,14 +5,14 @@ type Variant = "primary" | "secondary" | "outline" | "ghost";
 const variantClasses: Record<Variant, string> = {
   primary: "bg-primary active:bg-primary-dark",
   secondary: "bg-secondary active:bg-secondary-dark",
-  outline: "border border-primary bg-transparent active:bg-surface-alt",
+  outline: "bg-surface-alt active:bg-surface",
   ghost: "bg-transparent active:bg-surface-alt",
 };
 
 const variantTextClasses: Record<Variant, string> = {
   primary: "text-white",
   secondary: "text-white",
-  outline: "text-primary",
+  outline: "text-primary-dark",
   ghost: "text-primary",
 };
 
@@ -28,7 +28,7 @@ export function Button({ variant = "primary", loading = false, disabled, childre
       accessibilityRole="button"
       disabled={disabled || loading}
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-      className={`min-h-[48px] items-center justify-center rounded-lg px-4 py-3 ${variantClasses[variant]} ${
+      className={`min-h-[52px] items-center justify-center rounded-[14px] px-4 py-3 ${variantClasses[variant]} ${
         disabled || loading ? "opacity-60" : ""
       } ${className ?? ""}`}
       {...props}

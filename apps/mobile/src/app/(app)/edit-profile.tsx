@@ -1,15 +1,17 @@
 import { useState } from "react";
 import { router } from "expo-router";
-import { ScrollView, Text } from "react-native";
+import { ArrowLeft } from "lucide-react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { updatePatientProfileSchema, updateProfileSchema } from "@repo/types";
+import { colors } from "@repo/ui-tokens";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
 import { useApiQuery } from "@/lib/use-api";
 import { toDateInput, type PatientClinicalProfile, type PatientProfile } from "@/lib/patient-data";
-import { AppHeader } from "@/components/app-header";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
+import { Note } from "@/components/ui/note";
 import { TextField } from "@/components/ui/text-field";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { LoadingState } from "@/components/ui/states";
@@ -106,9 +108,10 @@ function EditProfileForm({ account, clinical }: { account: PatientProfile; clini
       />
       <TextField label="Contact address" value={contact} onChangeText={setContact} error={fieldErrors.contact} />
 
-      <Text className="font-body text-sm text-body">
-        Your email address and your measurements are managed by your dietitian. Contact them if either needs to change.
-      </Text>
+      <Note>
+        Your email address and your measurements are managed by your dietitian. Changes to your contact details are
+        shared with them.
+      </Note>
 
       <Button onPress={onSubmit} loading={submitting}>
         Save changes
@@ -126,9 +129,19 @@ export default function EditProfile() {
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
-      <AppHeader title="Edit profile" back />
-
       <ScrollView contentContainerClassName="gap-5 px-6 py-6" keyboardShouldPersistTaps="handled">
+        <View className="flex-row items-center gap-3">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            onPress={() => router.back()}
+          >
+            <ArrowLeft size={22} color={colors.textBody} />
+          </Pressable>
+          <Text className="font-heading-bold text-lg text-heading">Edit personal info</Text>
+        </View>
+
         {loading ? (
           <LoadingState />
         ) : error ? (

@@ -5,6 +5,7 @@ import { PrismaModule } from "./prisma/prisma.module";
 import { HealthController } from "./health/health.controller";
 import { AuthModule } from "./auth/auth.module";
 import { AuditModule } from "./audit/audit.module";
+import { EmailModule } from "./email/email.module";
 import { AdminModule } from "./admin/admin.module";
 import { DietitianModule } from "./dietitian/dietitian.module";
 import { InvitesModule } from "./invites/invites.module";
@@ -26,6 +27,7 @@ import { RolesGuard } from "./common/guards/roles.guard";
     }),
     PrismaModule,
     AuditModule,
+    EmailModule,
     AuthModule,
     AdminModule,
     DietitianModule,

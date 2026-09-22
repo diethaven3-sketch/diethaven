@@ -1,8 +1,10 @@
 import { ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { randomBytes } from "node:crypto";
 import type { InviteRequestInput } from "@repo/types";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
+import { EmailService } from "../email/email.service";
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -25,6 +27,8 @@ export class DietitianService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly emailService: EmailService,
+    private readonly config: ConfigService,
   ) {}
 
   getOwnProfile(dietitianId: string) {
@@ -84,7 +88,21 @@ export class DietitianService {
       },
     });
 
-    this.logger.log(`Invite link for ${dto.email}: /invites/${token}`);
+    const dietitian = await this.prisma.user.findUnique({
+      where: { id: dietitianId },
+      select: { name: true },
+    });
+
+    const webOrigin = this.config.get<string>("WEB_ORIGIN") || "http://localhost:3000";
+    const inviteUrl = `${webOrigin}/invites/${token}`;
+
+    this.logger.log(`Invite link for ${dto.email}: ${inviteUrl}`);
+
+    await this.emailService.sendPatientInvite({
+      to: dto.email,
+      dietitianName: dietitian?.name || "Your Dietitian",
+      inviteUrl,
+    });
 
     return {
       id: invite.id,
