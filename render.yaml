@@ -6,8 +6,9 @@ services:
     region: oregon
     # Build only the API and its workspace deps (database, types) — a plain
     # `bun run build` would also build web and mobile. Migrations run here
-    # because preDeployCommand isn't available on the free plan.
-    buildCommand: bun install --frozen-lockfile && bun x turbo run build --filter=api && cd packages/database && bun run db:deploy
+    # because preDeployCommand isn't available on the free plan. The install
+    # overrides NODE_ENV so devDependencies (prisma, nest cli, tsc) are kept.
+    buildCommand: NODE_ENV=development bun install --frozen-lockfile && bun x turbo run build --filter=api && cd packages/database && bun run db:deploy
     startCommand: node apps/api/dist/main.js
     healthCheckPath: /health
     envVars:
