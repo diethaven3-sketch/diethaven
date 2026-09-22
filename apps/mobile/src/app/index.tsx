@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Redirect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ActivityIndicator, View } from "react-native";
+import { colors } from "@repo/ui-tokens";
 import { useAuth } from "@/lib/auth-context";
 
 const ONBOARDING_KEY = "diethaven_onboarding_seen";
@@ -17,7 +18,7 @@ export default function Index() {
   if (loading || onboardingSeen === null) {
     return (
       <View className="flex-1 items-center justify-center bg-surface">
-        <ActivityIndicator color="#2E6B3E" />
+        <ActivityIndicator color={colors.primary} />
       </View>
     );
   }
@@ -30,5 +31,5 @@ export default function Index() {
     return <Redirect href="/(auth)/welcome" />;
   }
 
-  return <Redirect href="/(app)/home" />;
+  return <Redirect href="/(app)/(tabs)/home" />;
 }

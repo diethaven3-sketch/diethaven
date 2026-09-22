@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Link, router } from "expo-router";
-import { Text } from "react-native";
+import { ArrowLeft } from "lucide-react-native";
+import { Pressable, Text } from "react-native";
 import { loginSchema } from "@repo/types";
+import { colors } from "@repo/ui-tokens";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
 import { Screen } from "@/components/screen";
@@ -37,7 +39,7 @@ export default function Login() {
         body: parsed.data,
       });
       await login(accessToken);
-      router.replace("/(app)/home");
+      router.replace("/(app)/(tabs)/home");
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
     } finally {
@@ -47,7 +49,17 @@ export default function Login() {
 
   return (
     <Screen>
-      <Text className="font-heading-bold text-2xl text-heading">Log in</Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        onPress={() => router.back()}
+        className="-mb-2 self-start"
+      >
+        <ArrowLeft size={22} color={colors.textBody} />
+      </Pressable>
+
+      <Text className="font-heading-bold text-2xl text-heading">Log in with password</Text>
 
       {formError ? <Banner tone="danger">{formError}</Banner> : null}
 

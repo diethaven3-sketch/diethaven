@@ -29,6 +29,6 @@ export class AssessmentsController {
     @CurrentUser() user: AuthenticatedUser,
     @Query(new ZodValidationPipe(assessmentsQuerySchema)) query: AssessmentsQuery,
   ) {
-    return this.assessmentsService.listForPatient(user.id, query.patientId);
+    return this.assessmentsService.listForPatient(user.id, query.patientId, query.domain);
   }
 }

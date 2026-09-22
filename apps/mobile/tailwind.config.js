@@ -14,6 +14,8 @@ module.exports = {
         "surface-alt": colors.neutralBackgroundAlt,
         body: colors.textBody,
         heading: colors.textHeading,
+        muted: colors.textMuted,
+        danger: colors.danger,
       },
       fontFamily: {
         heading: ["Figtree_600SemiBold"],

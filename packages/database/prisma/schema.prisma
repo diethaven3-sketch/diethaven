@@ -59,6 +59,43 @@ enum InviteStatus {
   EXPIRED
 }
 
+// The three IDNT nutrition-diagnosis domains (guideline §4.2.2).
+enum DiagnosisDomain {
+  INTAKE
+  CLINICAL
+  BEHAVIORAL_ENVIRONMENTAL
+}
+
+enum DiagnosisStatus {
+  ACTIVE
+  RESOLVED
+  RULED_OUT
+}
+
+// Outcome recorded at a follow-up visit (guideline §4.2.4's own wording).
+enum OutcomeStatus {
+  RESOLVED
+  IMPROVED
+  UNCHANGED
+  WORSENED
+}
+
+enum InterventionStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  DISCONTINUED
+}
+
+enum MealType {
+  BREAKFAST
+  MORNING_SNACK
+  LUNCH
+  AFTERNOON_SNACK
+  DINNER
+  EVENING_SNACK
+}
+
 // Nigerian Food Exchange List groups (guideline §4.2.3's own examples).
 enum ExchangeGroup {
   STARCHES
@@ -70,40 +107,49 @@ enum ExchangeGroup {
 }
 
 model User {
-  id           String     @id @default(cuid())
-  role         Role
-  name         String
-  email        String     @unique
-  phone        String?
-  passwordHash String
-  status       UserStatus @default(ACTIVE)
-  otpHash      String?
-  otpExpiresAt DateTime?
+  id                     String     @id @default(cuid())
+  role                   Role
+  name                   String
+  email                  String     @unique
+  phone                  String?
+  passwordHash           String
+  status                 UserStatus @default(ACTIVE)
+  otpHash                String?
+  otpExpiresAt           DateTime?
   resetPasswordHash      String?
   resetPasswordExpiresAt DateTime?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
 
   dietitianProfile DietitianProfile?
   patientProfile   PatientProfile?
 
-  patientsAsDietitian    PatientProfile[] @relation("DietitianPatients")
-  assessmentsAsDietitian Assessment[]     @relation("DietitianAssessments")
-  assessmentsAsPatient   Assessment[]     @relation("PatientAssessments")
-  auditLogs              AuditLog[]
-  invitesSent            Invite[]         @relation("DietitianInvites")
+  patientsAsDietitian      PatientProfile[] @relation("DietitianPatients")
+  assessmentsAsDietitian   Assessment[]     @relation("DietitianAssessments")
+  assessmentsAsPatient     Assessment[]     @relation("PatientAssessments")
+  diagnosesAsDietitian     Diagnosis[]      @relation("DietitianDiagnoses")
+  diagnosesAsPatient       Diagnosis[]      @relation("PatientDiagnoses")
+  interventionsAsDietitian Intervention[]   @relation("DietitianInterventions")
+  interventionsAsPatient   Intervention[]   @relation("PatientInterventions")
+  mealPlansAsDietitian     MealPlan[]       @relation("DietitianMealPlans")
+  mealPlansAsPatient       MealPlan[]       @relation("PatientMealPlans")
+  followUpsAsDietitian     FollowUp[]       @relation("DietitianFollowUps")
+  followUpsAsPatient       FollowUp[]       @relation("PatientFollowUps")
+  foodLogs                 FoodLog[]
+  auditLogs                AuditLog[]
+  invitesSent              Invite[]         @relation("DietitianInvites")
 }
 
 model DietitianProfile {
-  id             String                   @id @default(cuid())
-  userId         String                   @unique
-  user           User                     @relation(fields: [userId], references: [id])
+  id             String                  @id @default(cuid())
+  userId         String                  @unique
+  user           User                    @relation(fields: [userId], references: [id])
   licenseNumber  String
   specialty      String
   facility       String
-  approvalStatus DietitianApprovalStatus  @default(PENDING)
-  createdAt      DateTime                 @default(now())
-  updatedAt      DateTime                 @updatedAt
+  approvalStatus DietitianApprovalStatus @default(PENDING)
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
 }
 
 model PatientProfile {
@@ -137,8 +183,169 @@ model Assessment {
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
+  diagnoses Diagnosis[]
+
   @@index([patientId])
   @@index([dietitianId])
+}
+
+// An IDNT PES statement: Problem (diagnostic label) related to Etiology, as
+// evidenced by Signs/Symptoms drawn from the assessment (guideline §4.2.2).
+model Diagnosis {
+  id            String          @id @default(cuid())
+  patientId     String
+  patient       User            @relation("PatientDiagnoses", fields: [patientId], references: [id])
+  dietitianId   String
+  dietitian     User            @relation("DietitianDiagnoses", fields: [dietitianId], references: [id])
+  // The assessment this diagnosis was drawn from. Nullable so a diagnosis is
+  // never lost if it predates a linked assessment record.
+  assessmentId  String?
+  assessment    Assessment?     @relation(fields: [assessmentId], references: [id])
+  domain        DiagnosisDomain
+  // Code from the curated IDNT library, or null when the problem is free-text.
+  problemCode   String?
+  problem       String
+  etiology      String
+  signsSymptoms String
+  // Which assessment fields served as the signs/symptoms evidence, for
+  // traceability: [{ assessmentId, domain, field, label, value }].
+  evidence      Json
+  status        DiagnosisStatus @default(ACTIVE)
+  // Always false today — there are no AI features. The column exists because
+  // the guideline's entity list defines it, so the Phase 4 AI layer won't need
+  // a migration. Nothing in the UI may present a diagnosis as AI-generated
+  // while this is false.
+  aiGenerated   Boolean         @default(false)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  interventions Intervention[]
+  followUps     FollowUp[]
+
+  @@index([patientId])
+  @@index([dietitianId])
+  @@index([assessmentId])
+}
+
+// A meal plan built from the Nigerian Food Exchange List (guideline §4.2.3).
+model MealPlan {
+  id             String   @id @default(cuid())
+  patientId      String
+  patient        User     @relation("PatientMealPlans", fields: [patientId], references: [id])
+  dietitianId    String
+  dietitian      User     @relation("DietitianMealPlans", fields: [dietitianId], references: [id])
+  name           String
+  // Ordered meals, each with its timing and exchange-list selections:
+  // [{ mealType, time, items: [{ foodExchangeItemId, foodName, exchangeGroup,
+  //    portionSize, exchanges }] }]. Food details are copied onto the plan so a
+  // later edit to the reference list can't silently rewrite a prescribed plan.
+  meals          Json
+  calorieTarget  Float?
+  carbsTargetG   Float?
+  proteinTargetG Float?
+  fatTargetG     Float?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  intervention Intervention?
+
+  @@index([patientId])
+  @@index([dietitianId])
+}
+
+// Nutrition intervention: the care plan answering an accepted diagnosis, with
+// an optional meal plan and prescription (guideline §4.2.3).
+model Intervention {
+  id              String             @id @default(cuid())
+  patientId       String
+  patient         User               @relation("PatientInterventions", fields: [patientId], references: [id])
+  dietitianId     String
+  dietitian       User               @relation("DietitianInterventions", fields: [dietitianId], references: [id])
+  // Required: every intervention maps to a specific PES problem/etiology.
+  diagnosisId     String
+  diagnosis       Diagnosis          @relation(fields: [diagnosisId], references: [id])
+  carePlanDetails String
+  mealPlanId      String?            @unique
+  mealPlan        MealPlan?          @relation(fields: [mealPlanId], references: [id])
+  // Formal nutrition prescription: { energyKcal, carbsG, proteinG, fatG,
+  // restrictions, supplements, notes }.
+  prescription    Json?
+  status          InterventionStatus @default(ACTIVE)
+  // Always false today — see the same note on Diagnosis.aiGenerated.
+  aiGenerated     Boolean            @default(false)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  followUps FollowUp[]
+
+  @@index([patientId])
+  @@index([dietitianId])
+  @@index([diagnosisId])
+}
+
+// Structured note for one follow-up visit, recording how the patient responded
+// to a prior diagnosis or intervention (guideline §4.2.4).
+//
+// Weight, BMI and lab values are deliberately NOT duplicated here. The
+// guideline sketches a MonitoringEntry carrying them, but Assessment already
+// holds that data as a dated, domain-tagged series — ANTHROPOMETRIC rows for
+// weight/BMI, BIOCHEMICAL rows for labs. A second home would fork the source of
+// truth, so trends are derived from Assessment and this model carries only what
+// is genuinely new: the visit's outcome and narrative.
+model FollowUp {
+  id             String        @id @default(cuid())
+  patientId      String
+  patient        User          @relation("PatientFollowUps", fields: [patientId], references: [id])
+  dietitianId    String
+  dietitian      User          @relation("DietitianFollowUps", fields: [dietitianId], references: [id])
+  date           DateTime      @default(now())
+  // What this visit was reviewing. Both nullable and both allowed together: a
+  // visit may review a diagnosis, the intervention answering it, or both.
+  diagnosisId    String?
+  diagnosis      Diagnosis?    @relation(fields: [diagnosisId], references: [id])
+  interventionId String?
+  intervention   Intervention? @relation(fields: [interventionId], references: [id])
+  outcome        OutcomeStatus
+  notes          String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([patientId])
+  @@index([dietitianId])
+  @@index([diagnosisId])
+  @@index([interventionId])
+}
+
+// A patient's own record of what they ate (guideline §4.2.5). Written by the
+// patient, read by them and their linked dietitian.
+//
+// No stored adherence flag: adherence is "% of plan followed", which is a
+// per-day aggregate against the prescribed meal plan, not a property of one
+// entry. It is computed on read — see `packages/types/src/food-log.ts`.
+model FoodLog {
+  id            String   @id @default(cuid())
+  patientId     String
+  patient       User     @relation(fields: [patientId], references: [id])
+  date          DateTime @default(now())
+  mealType      MealType
+  // Foods chosen from the exchange list, with their details copied in for the
+  // same reason meal plans copy them: [{ foodExchangeItemId, foodName,
+  // exchangeGroup, portionSize, exchanges }].
+  items         Json
+  // Free-text alternative for anything not in the exchange list.
+  description   String?
+  // Populated only if image upload is ever built; no storage provider is
+  // configured, so nothing writes to this yet.
+  photoUrl      String?
+  // Optional patient-side feedback, 1-5 scales.
+  hungerBefore  Int?
+  fullnessAfter Int?
+  symptoms      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([patientId])
+  @@index([patientId, date])
 }
 
 model AuditLog {

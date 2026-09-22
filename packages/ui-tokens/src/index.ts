@@ -9,6 +9,8 @@ export const colors = {
   neutralBackgroundAlt: "#E6F0E8",
   textBody: "#222222",
   textHeading: "#1F4A2C",
+  textMuted: "#6B6B63", // secondary/meta text — labels, timestamps, placeholders
+  danger: "#C24A3F",
 } as const;
 
 export type ColorToken = keyof typeof colors;

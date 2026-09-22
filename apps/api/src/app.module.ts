@@ -5,10 +5,15 @@ import { PrismaModule } from "./prisma/prisma.module";
 import { HealthController } from "./health/health.controller";
 import { AuthModule } from "./auth/auth.module";
 import { AuditModule } from "./audit/audit.module";
+import { EmailModule } from "./email/email.module";
 import { AdminModule } from "./admin/admin.module";
 import { DietitianModule } from "./dietitian/dietitian.module";
 import { InvitesModule } from "./invites/invites.module";
 import { AssessmentsModule } from "./assessments/assessments.module";
+import { DiagnosesModule } from "./diagnoses/diagnoses.module";
+import { InterventionsModule } from "./interventions/interventions.module";
+import { FollowUpsModule } from "./follow-ups/follow-ups.module";
+import { FoodLogsModule } from "./food-logs/food-logs.module";
 import { PatientModule } from "./patient/patient.module";
 import { JwtAuthGuard } from "./common/guards/jwt-auth.guard";
 import { RolesGuard } from "./common/guards/roles.guard";
@@ -22,11 +27,16 @@ import { RolesGuard } from "./common/guards/roles.guard";
     }),
     PrismaModule,
     AuditModule,
+    EmailModule,
     AuthModule,
     AdminModule,
     DietitianModule,
     InvitesModule,
     AssessmentsModule,
+    DiagnosesModule,
+    InterventionsModule,
+    FollowUpsModule,
+    FoodLogsModule,
     PatientModule,
   ],
   controllers: [HealthController],
