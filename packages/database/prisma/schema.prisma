@@ -1,7 +1,7 @@
 // Explicit output path so generation is deterministic regardless of how
-// yarn classic hoists @prisma/client across workspaces (it flip-flopped
-// between root-hoisted and nested in this package, breaking cross-package
-// type identity each time).
+// the package manager places @prisma/client across workspaces (yarn classic
+// flip-flopped between root-hoisted and nested in this package, breaking
+// cross-package type identity each time).
 generator client {
   provider = "prisma-client-js"
   output   = "../generated/client"

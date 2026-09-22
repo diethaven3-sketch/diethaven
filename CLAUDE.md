@@ -60,7 +60,7 @@ If a task seems to require any of these, stop and confirm with the user first �
 
 | Layer | Choice | Notes |
 |---|---|---|
-| Monorepo | Turborepo + Yarn (classic v1) workspaces | Workspaces declared in root `package.json`; pinned via `devEngines.packageManager` (yarn 1.22.22). |
+| Monorepo | Turborepo + Bun workspaces | Workspaces declared in root `package.json`; pinned via `packageManager` (bun 1.4.2). `bun.lock` is the only lockfile; bun uses its isolated linker, so every package must declare what it imports — nothing leaks in via hoisting. |
 | Web | Next.js (App Router), TypeScript | Dietitian + Admin dashboard. |
 | Mobile | React Native + Expo, TypeScript | Patient app. |
 | Backend | NestJS, TypeScript | Single API serving both apps. REST controllers (not tRPC — chosen for conventional structure over a solo-dev speed tradeoff). |
@@ -99,24 +99,24 @@ diethaven-consult/
 ## 5. Commands
 
 ```bash
-yarn install                       # install everything
+bun install                           # install everything
 
-yarn dev                           # turbo run dev (all apps, if resources allow)
-yarn workspace api dev             # NestJS only
-yarn workspace web dev             # Next.js only
-yarn workspace mobile dev          # expo start
+bun run dev                           # turbo run dev (all apps, if resources allow)
+bun run --filter api dev              # NestJS only
+bun run --filter web dev              # Next.js only
+bun run --filter mobile dev           # expo start
 
-yarn workspace database db:migrate  # prisma migrate dev
-yarn workspace database db:studio   # prisma studio
-yarn workspace database db:generate # prisma generate
+bun run --filter database db:migrate  # prisma migrate dev
+bun run --filter database db:studio   # prisma studio
+bun run --filter database db:generate # prisma generate
 
-yarn lint
-yarn check-types
-yarn build
-yarn workspace api test          # no root "test" task in turbo.json yet — per-workspace for now
+bun run lint
+bun run check-types
+bun run build
+bun run --filter api test             # no root "test" task in turbo.json yet — per-workspace for now
 ```
 
-Given the solo, sequenced build order in §2, you will usually run **one** app at a time (`yarn workspace api dev`, then later `yarn workspace web dev`, etc.) rather than `yarn dev` for all three at once.
+Given the solo, sequenced build order in §2, you will usually run **one** app at a time (`bun run --filter api dev`, then later `bun run --filter web dev`, etc.) rather than `bun run dev` for all three at once.
 
 ---
 
@@ -171,7 +171,7 @@ These apply to every PR from day one, not deferred to a later "polish" pass:
 ## 9. Open items (need a decision before or during this milestone)
 
 - Confirm exact brand hex codes against DietHaven's brand sheet.
-- Hosting provider not chosen yet — when it is, confirm it has encryption-at-rest enabled before storing real patient data (see §8; this is the only remaining step to close out that constraint).
+- Hosting: the API deploys to Render via `render.yaml` (free plan; migrations run in the build step). `DATABASE_URL` points at an external managed Postgres (Neon) rather than Render Postgres, whose free tier expires after 30 days. Confirm that database has encryption-at-rest enabled before storing real patient data (see §8; this is the only remaining step to close out that constraint).
 - Nigerian Food Exchange List dataset source — not needed for Milestone 1, but worth sourcing now so Milestone 2 (Intervention) isn't blocked.
 - AI provider/model choice — not needed until the AI milestone, but data-handling implications (sending patient data to a third-party API) need an early conversation.
 - Subscription/billing model — affects `User`/account tiers, ideally decided before Milestone 2.
