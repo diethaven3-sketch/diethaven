@@ -11,6 +11,7 @@ import {
   labTrends,
   plannedExchanges,
   weightSummary,
+  validateWithSchema,
   type LabTrend,
   type Meal,
   type OutcomeStatus,
@@ -56,6 +57,12 @@ function signed(value: number, unit: string) {
 }
 
 function LabTrendRow({ trend }: { trend: LabTrend }) {
+  if (!trend.latest) return null;
+  const change =
+    trend.points.length > 1
+      ? Math.round((trend.points[trend.points.length - 1]!.value - trend.points[0]!.value) * 10) / 10
+      : null;
+
   return (
     <tr>
       <Td>{trend.label}</Td>
@@ -63,9 +70,9 @@ function LabTrendRow({ trend }: { trend: LabTrend }) {
         {trend.latest.value} {trend.unit}
       </Td>
       <Td>
-        {trend.referenceLow}–{trend.referenceHigh} {trend.unit}
+        {trend.low}–{trend.high} {trend.unit}
       </Td>
-      <Td>{trend.change === null ? "—" : signed(trend.change, trend.unit)}</Td>
+      <Td>{change === null ? "—" : signed(change, trend.unit)}</Td>
       <Td>
         <Badge tone={flagTone[trend.latest.flag]}>{trend.latest.flag}</Badge>
       </Td>
@@ -105,7 +112,7 @@ function ProgressReport({
   );
   const averageAdherencePercent = useMemo(() => averageAdherence(adherenceDays), [adherenceDays]);
   const latest = anthro[anthro.length - 1];
-  const abnormal = trends.filter((trend) => trend.latest.flag !== "NORMAL");
+  const abnormal = trends.filter((trend) => trend.latest && trend.latest.flag !== "NORMAL");
 
   const hasAnything = anthro.length > 0 || trends.length > 0 || followUps.length > 0 || foodLogs.length > 0;
   if (!hasAnything) {
@@ -231,34 +238,57 @@ function FollowUpForm({
   const [interventionId, setInterventionId] = useState("");
   const [outcome, setOutcome] = useState<OutcomeStatus>("IMPROVED");
   const [notes, setNotes] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const clearFieldError = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setError(null);
 
-    const parsed = followUpCreateSchema.safeParse({
+    const payload = {
       patientId,
       ...(diagnosisId ? { diagnosisId } : {}),
       ...(interventionId ? { interventionId } : {}),
       outcome,
-      notes,
-    });
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "Check the form and retry.");
+      notes: notes.trim(),
+    };
+
+    const validation = validateWithSchema(followUpCreateSchema, payload);
+    if (!validation.success) {
+      setFieldErrors(validation.errors);
+      setError(validation.firstError);
       return;
     }
+    setFieldErrors({});
 
     setSubmitting(true);
     try {
-      await apiFetch("/follow-ups", { method: "POST", token, body: parsed.data });
+      await apiFetch("/follow-ups", { method: "POST", token, body: validation.data });
       setDiagnosisId("");
       setInterventionId("");
       setNotes("");
+      setFieldErrors({});
       onSaved();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to save the follow-up.");
+      if (err instanceof ApiError) {
+        setError(err.message);
+        if (Object.keys(err.fieldErrors).length > 0) {
+          setFieldErrors((prev) => ({ ...prev, ...err.fieldErrors }));
+        }
+      } else {
+        setError("Failed to save the follow-up.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -290,7 +320,11 @@ function FollowUpForm({
             label="Diagnosis reviewed"
             name="diagnosisId"
             value={diagnosisId}
-            onChange={(e) => setDiagnosisId(e.target.value)}
+            onChange={(e) => {
+              setDiagnosisId(e.target.value);
+              clearFieldError("diagnosisId");
+            }}
+            error={fieldErrors.diagnosisId}
           >
             <option value="">None</option>
             {diagnoses.map((diagnosis) => (
@@ -305,7 +339,11 @@ function FollowUpForm({
             label="Intervention reviewed"
             name="interventionId"
             value={interventionId}
-            onChange={(e) => setInterventionId(e.target.value)}
+            onChange={(e) => {
+              setInterventionId(e.target.value);
+              clearFieldError("diagnosisId");
+            }}
+            error={fieldErrors.interventionId}
           >
             <option value="">None</option>
             {interventions.map((intervention) => (
@@ -320,7 +358,11 @@ function FollowUpForm({
           label="Outcome"
           name="outcome"
           value={outcome}
-          onChange={(e) => setOutcome(e.target.value as OutcomeStatus)}
+          onChange={(e) => {
+            setOutcome(e.target.value as OutcomeStatus);
+            clearFieldError("outcome");
+          }}
+          error={fieldErrors.outcome}
           className="sm:max-w-xs"
         >
           {(Object.keys(OUTCOME_STATUS_LABELS) as OutcomeStatus[]).map((value) => (
@@ -335,8 +377,12 @@ function FollowUpForm({
           name="notes"
           rows={4}
           value={notes}
-          onChange={(e) => setNotes(e.target.value)}
+          onChange={(e) => {
+            setNotes(e.target.value);
+            clearFieldError("notes");
+          }}
           hint="What changed, what the patient reported, and what happens next."
+          error={fieldErrors.notes}
           required
         />
 

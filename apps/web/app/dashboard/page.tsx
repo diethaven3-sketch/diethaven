@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { inviteRequestSchema } from "@repo/types";
+import { inviteRequestSchema, validateWithSchema } from "@repo/types";
 import { apiFetch, ApiError } from "../../lib/api-client";
 import { useAuth } from "../../lib/auth-context";
 import { RequireRole } from "../../components/require-role";
@@ -31,6 +31,7 @@ interface PatientRow {
 function InvitePatientForm({ onInvited }: { onInvited: () => void }) {
   const { token } = useAuth();
   const [email, setEmail] = useState("");
+  const [fieldError, setFieldError] = useState<string | undefined>();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ email: string; devToken?: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -38,11 +39,13 @@ function InvitePatientForm({ onInvited }: { onInvited: () => void }) {
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setError(null);
+    setFieldError(undefined);
     setResult(null);
 
-    const parsed = inviteRequestSchema.safeParse({ email });
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "Invalid email");
+    const validation = validateWithSchema(inviteRequestSchema, { email: email.trim() });
+    if (!validation.success) {
+      setFieldError(validation.errors.email);
+      setError(validation.firstError);
       return;
     }
 
@@ -51,13 +54,21 @@ function InvitePatientForm({ onInvited }: { onInvited: () => void }) {
       const res = await apiFetch<{ email: string; devToken?: string }>("/dietitian/invites", {
         method: "POST",
         token,
-        body: { email },
+        body: validation.data,
       });
       setResult(res);
       setEmail("");
+      setFieldError(undefined);
       onInvited();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to send invite.");
+      if (err instanceof ApiError) {
+        setError(err.message);
+        if (err.fieldErrors.email) {
+          setFieldError(err.fieldErrors.email);
+        }
+      } else {
+        setError("Failed to send invite.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -73,7 +84,12 @@ function InvitePatientForm({ onInvited }: { onInvited: () => void }) {
             type="email"
             name="invite-email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              if (fieldError) setFieldError(undefined);
+              if (error) setError(null);
+            }}
+            error={fieldError}
             required
           />
         </div>

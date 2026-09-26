@@ -9,6 +9,7 @@ import {
   MEAL_TYPES_FOR_LOGGING,
   MEAL_TYPE_LABELS,
   foodLogCreateSchema,
+  validateWithSchema,
   type FoodLogItem,
   type MealType,
 } from "@repo/types";
@@ -125,8 +126,19 @@ function MealForm({
   const [fullnessAfter, setFullnessAfter] = useState<number | null>(entry?.fullnessAfter ?? null);
   const [symptoms, setSymptoms] = useState(entry?.symptoms ?? "");
   const [search, setSearch] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const clearFieldError = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
 
   const matches = search.trim()
     ? foods.filter((food) => food.foodName.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
@@ -144,6 +156,8 @@ function MealForm({
       },
     ]);
     setSearch("");
+    clearFieldError("description");
+    if (error) setError(null);
   };
 
   const setExchanges = (index: number, delta: number) => {
@@ -166,11 +180,13 @@ function MealForm({
       symptoms: symptoms.trim() || undefined,
     };
 
-    const parsed = foodLogCreateSchema.safeParse(payload);
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "Add what you ate before saving.");
+    const validation = validateWithSchema(foodLogCreateSchema, payload);
+    if (!validation.success) {
+      setFieldErrors(validation.errors);
+      setError(validation.firstError);
       return;
     }
+    setFieldErrors({});
 
     setSubmitting(true);
     try {
@@ -190,11 +206,18 @@ function MealForm({
           },
         });
       } else {
-        await apiFetch("/food-logs", { method: "POST", token, body: parsed.data });
+        await apiFetch("/food-logs", { method: "POST", token, body: validation.data });
       }
       router.back();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't save this entry. Please try again.");
+      if (err instanceof ApiError) {
+        setError(err.message);
+        if (Object.keys(err.fieldErrors).length > 0) {
+          setFieldErrors((prev) => ({ ...prev, ...err.fieldErrors }));
+        }
+      } else {
+        setError("Couldn't save this entry. Please try again.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -326,7 +349,12 @@ function MealForm({
         <TextField
           label="Anything not on the list"
           value={description}
-          onChangeText={setDescription}
+          onChangeText={(text) => {
+            setDescription(text);
+            clearFieldError("description");
+            if (error) setError(null);
+          }}
+          error={fieldErrors.description}
           placeholder="Describe what you ate"
           multiline
           numberOfLines={3}

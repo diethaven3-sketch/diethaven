@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { exchangeGroupSchema } from "./food-exchange";
 
-export const interventionStatusSchema = z.enum(["DRAFT", "ACTIVE", "COMPLETED", "DISCONTINUED"]);
+export const interventionStatusSchema = z.enum(["DRAFT", "ACTIVE", "COMPLETED", "DISCONTINUED"], {
+  message: "Please select a valid intervention status",
+});
 export type InterventionStatus = z.infer<typeof interventionStatusSchema>;
 
 export const INTERVENTION_STATUS_LABELS: Record<InterventionStatus, string> = {
@@ -11,14 +13,12 @@ export const INTERVENTION_STATUS_LABELS: Record<InterventionStatus, string> = {
   DISCONTINUED: "Discontinued",
 };
 
-export const mealTypeSchema = z.enum([
-  "BREAKFAST",
-  "MORNING_SNACK",
-  "LUNCH",
-  "AFTERNOON_SNACK",
-  "DINNER",
-  "EVENING_SNACK",
-]);
+export const mealTypeSchema = z.enum(
+  ["BREAKFAST", "MORNING_SNACK", "LUNCH", "AFTERNOON_SNACK", "DINNER", "EVENING_SNACK"],
+  {
+    message: "Please select a valid meal type",
+  },
+);
 export type MealType = z.infer<typeof mealTypeSchema>;
 
 export const MEAL_TYPE_LABELS: Record<MealType, string> = {
@@ -46,12 +46,15 @@ export const MEAL_TYPE_ORDER: MealType[] = [
  * silently rewrite a plan a patient is already following.
  */
 export const mealItemSchema = z.object({
-  foodExchangeItemId: z.string().min(1),
-  foodName: z.string().min(1).max(200),
+  foodExchangeItemId: z.string({ message: "Food selection is required" }).min(1, "Food selection is required"),
+  foodName: z.string().trim().min(1, "Food name is required").max(200, "Food name is too long"),
   exchangeGroup: exchangeGroupSchema,
-  portionSize: z.string().min(1).max(100),
+  portionSize: z.string().trim().min(1, "Portion size is required").max(100, "Portion size is too long"),
   /** Number of exchanges of this food, e.g. 2 × "1 medium yam slice". */
-  exchanges: z.number().positive().max(50),
+  exchanges: z
+    .number({ message: "Exchanges must be a number" })
+    .positive("Exchanges must be greater than 0")
+    .max(50, "Exchanges cannot exceed 50"),
   calories: z.number().nonnegative().optional(),
   carbsG: z.number().nonnegative().optional(),
   proteinG: z.number().nonnegative().optional(),
@@ -69,22 +72,22 @@ export const mealSchema = z.object({
 export type Meal = z.infer<typeof mealSchema>;
 
 export const mealPlanSchema = z.object({
-  name: z.string().trim().min(1, "Name the meal plan").max(200),
-  meals: z.array(mealSchema).min(1, "Add at least one meal").max(10),
-  calorieTarget: z.number().nonnegative().max(20000).optional(),
-  carbsTargetG: z.number().nonnegative().max(2000).optional(),
-  proteinTargetG: z.number().nonnegative().max(2000).optional(),
-  fatTargetG: z.number().nonnegative().max(2000).optional(),
+  name: z.string({ message: "Meal plan name is required" }).trim().min(1, "Meal plan name is required").max(200, "Name is too long"),
+  meals: z.array(mealSchema).min(1, "Add at least one meal to the meal plan").max(10),
+  calorieTarget: z.number({ message: "Calorie target must be a number" }).nonnegative().max(20000).optional(),
+  carbsTargetG: z.number({ message: "Carbs target must be a number" }).nonnegative().max(2000).optional(),
+  proteinTargetG: z.number({ message: "Protein target must be a number" }).nonnegative().max(2000).optional(),
+  fatTargetG: z.number({ message: "Fat target must be a number" }).nonnegative().max(2000).optional(),
 });
 export type MealPlanInput = z.infer<typeof mealPlanSchema>;
 
 /** The formal nutrition prescription (guideline §4.2.3). */
 export const prescriptionSchema = z.object({
-  energyKcal: z.number().nonnegative().max(20000).optional(),
-  carbsG: z.number().nonnegative().max(2000).optional(),
-  proteinG: z.number().nonnegative().max(2000).optional(),
-  fatG: z.number().nonnegative().max(2000).optional(),
-  fluidMl: z.number().nonnegative().max(20000).optional(),
+  energyKcal: z.number({ message: "Energy target must be a number" }).nonnegative().max(20000).optional(),
+  carbsG: z.number({ message: "Carbohydrates must be a number" }).nonnegative().max(2000).optional(),
+  proteinG: z.number({ message: "Protein must be a number" }).nonnegative().max(2000).optional(),
+  fatG: z.number({ message: "Fat must be a number" }).nonnegative().max(2000).optional(),
+  fluidMl: z.number({ message: "Fluid target must be a number" }).nonnegative().max(20000).optional(),
   restrictions: z.string().trim().max(2000).optional(),
   supplements: z.string().trim().max(2000).optional(),
   notes: z.string().trim().max(2000).optional(),
@@ -92,10 +95,10 @@ export const prescriptionSchema = z.object({
 export type Prescription = z.infer<typeof prescriptionSchema>;
 
 export const interventionCreateSchema = z.object({
-  patientId: z.string().min(1),
+  patientId: z.string({ message: "Patient ID is required" }).min(1, "Patient ID is required"),
   /** Required: every intervention answers a specific accepted diagnosis. */
-  diagnosisId: z.string().min(1, "Select the diagnosis this intervention addresses"),
-  carePlanDetails: z.string().trim().min(1, "Describe the care plan").max(5000),
+  diagnosisId: z.string({ message: "Select the diagnosis this intervention addresses" }).min(1, "Select the diagnosis this intervention addresses"),
+  carePlanDetails: z.string({ message: "Care plan details are required" }).trim().min(1, "Describe the care plan").max(5000),
   prescription: prescriptionSchema.optional(),
   /** Created together with the intervention, in one transaction. */
   mealPlan: mealPlanSchema.optional(),
@@ -105,7 +108,7 @@ export type InterventionCreateInput = z.infer<typeof interventionCreateSchema>;
 
 export const interventionUpdateSchema = z
   .object({
-    carePlanDetails: z.string().trim().min(1).max(5000).optional(),
+    carePlanDetails: z.string().trim().min(1, "Care plan details cannot be empty").max(5000).optional(),
     prescription: prescriptionSchema.nullable().optional(),
     status: interventionStatusSchema.optional(),
   })
@@ -113,7 +116,7 @@ export const interventionUpdateSchema = z
 export type InterventionUpdateInput = z.infer<typeof interventionUpdateSchema>;
 
 export const interventionsQuerySchema = z.object({
-  patientId: z.string().min(1),
+  patientId: z.string({ message: "Patient ID is required" }).min(1, "Patient ID is required"),
   status: interventionStatusSchema.optional(),
 });
 export type InterventionsQuery = z.infer<typeof interventionsQuerySchema>;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent, type ChangeEvent } from "react";
-import { updateProfileSchema, changePasswordSchema } from "@repo/types";
+import { updateProfileSchema, changePasswordSchema, validateWithSchema } from "@repo/types";
 import { Camera, Trash2, UploadCloud } from "lucide-react";
 import { apiFetch, ApiError } from "../lib/api-client";
 import { useAuth, type UserProfile } from "../lib/auth-context";
@@ -24,6 +24,7 @@ export function ProfileForm() {
   const [phone, setPhone] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -44,6 +45,16 @@ export function ProfileForm() {
       .finally(() => setLoading(false));
   }, [token]);
 
+  const clearFieldError = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
+
   const handleImageFile = (file: File) => {
     setAvatarError(null);
     if (!file.type.startsWith("image/")) {
@@ -59,21 +70,20 @@ export function ProfileForm() {
     reader.onload = (event) => {
       const img = new Image();
       img.onload = () => {
-        // Resize image to max 320x320 for fast upload and storage
         const canvas = document.createElement("canvas");
-        const maxDim = 320;
+        const MAX_DIMENSION = 512;
         let width = img.width;
         let height = img.height;
 
         if (width > height) {
-          if (width > maxDim) {
-            height = Math.round((height * maxDim) / width);
-            width = maxDim;
+          if (width > MAX_DIMENSION) {
+            height = Math.round((height * MAX_DIMENSION) / width);
+            width = MAX_DIMENSION;
           }
         } else {
-          if (height > maxDim) {
-            width = Math.round((width * maxDim) / height);
-            height = maxDim;
+          if (height > MAX_DIMENSION) {
+            width = Math.round((width * MAX_DIMENSION) / height);
+            height = MAX_DIMENSION;
           }
         }
 
@@ -82,8 +92,10 @@ export function ProfileForm() {
         const ctx = canvas.getContext("2d");
         if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
-          const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.85);
-          setAvatarUrl(compressedDataUrl);
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+          setAvatarUrl(dataUrl);
+        } else {
+          setAvatarUrl(event.target?.result as string);
         }
       };
       img.src = event.target?.result as string;
@@ -106,28 +118,37 @@ export function ProfileForm() {
     setError(null);
     setSuccess(false);
 
-    const parsed = updateProfileSchema.safeParse({
-      name,
-      phone: phone || undefined,
+    const validation = validateWithSchema(updateProfileSchema, {
+      name: name.trim() || undefined,
+      phone: phone.trim() || undefined,
       avatarUrl: avatarUrl ?? null,
     });
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "Invalid input.");
+    if (!validation.success) {
+      setFieldErrors(validation.errors);
+      setError(validation.firstError);
       return;
     }
+    setFieldErrors({});
 
     setSubmitting(true);
     try {
       const updated = await apiFetch<UserProfile>("/auth/profile", {
         method: "PATCH",
         token,
-        body: parsed.data,
+        body: validation.data,
       });
       setProfile(updated);
       setGlobalProfile(updated);
       setSuccess(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to update profile.");
+      if (err instanceof ApiError) {
+        setError(err.message);
+        if (Object.keys(err.fieldErrors).length > 0) {
+          setFieldErrors((prev) => ({ ...prev, ...err.fieldErrors }));
+        }
+      } else {
+        setError("Failed to update profile.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -217,8 +238,27 @@ export function ProfileForm() {
           </div>
         </div>
 
-        <Field label="Full Name" name="name" value={name} onChange={(e) => setName(e.target.value)} required />
-        <Field label="Phone number (optional)" name="phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+        <Field
+          label="Full Name"
+          name="name"
+          value={name}
+          onChange={(e) => {
+            setName(e.target.value);
+            clearFieldError("name");
+          }}
+          error={fieldErrors.name}
+          required
+        />
+        <Field
+          label="Phone number (optional)"
+          name="phone"
+          value={phone}
+          onChange={(e) => {
+            setPhone(e.target.value);
+            clearFieldError("phone");
+          }}
+          error={fieldErrors.phone}
+        />
         <Field label="Email address" name="email" value={profile?.email ?? ""} disabled />
 
         <Button type="submit" loading={submitting} className="self-start mt-2">
@@ -234,9 +274,20 @@ export function PasswordForm() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  const clearFieldError = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -244,25 +295,35 @@ export function PasswordForm() {
     setSuccess(false);
 
     if (newPassword !== confirmPassword) {
-      setError("New password and confirmation don't match.");
+      setFieldErrors({ confirmPassword: "New password and confirmation do not match." });
+      setError("New password and confirmation do not match.");
       return;
     }
 
-    const parsed = changePasswordSchema.safeParse({ currentPassword, newPassword });
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "Invalid input.");
+    const validation = validateWithSchema(changePasswordSchema, { currentPassword, newPassword });
+    if (!validation.success) {
+      setFieldErrors(validation.errors);
+      setError(validation.firstError);
       return;
     }
+    setFieldErrors({});
 
     setSubmitting(true);
     try {
-      await apiFetch("/auth/change-password", { method: "POST", token, body: parsed.data });
+      await apiFetch("/auth/change-password", { method: "POST", token, body: validation.data });
       setSuccess(true);
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to change password.");
+      if (err instanceof ApiError) {
+        setError(err.message);
+        if (Object.keys(err.fieldErrors).length > 0) {
+          setFieldErrors((prev) => ({ ...prev, ...err.fieldErrors }));
+        }
+      } else {
+        setError("Failed to change password.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -282,7 +343,11 @@ export function PasswordForm() {
           type="password"
           name="currentPassword"
           value={currentPassword}
-          onChange={(e) => setCurrentPassword(e.target.value)}
+          onChange={(e) => {
+            setCurrentPassword(e.target.value);
+            clearFieldError("currentPassword");
+          }}
+          error={fieldErrors.currentPassword}
           required
         />
         <Field
@@ -290,7 +355,11 @@ export function PasswordForm() {
           type="password"
           name="newPassword"
           value={newPassword}
-          onChange={(e) => setNewPassword(e.target.value)}
+          onChange={(e) => {
+            setNewPassword(e.target.value);
+            clearFieldError("newPassword");
+          }}
+          error={fieldErrors.newPassword}
           required
         />
         <Field
@@ -298,7 +367,11 @@ export function PasswordForm() {
           type="password"
           name="confirmPassword"
           value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
+          onChange={(e) => {
+            setConfirmPassword(e.target.value);
+            clearFieldError("confirmPassword");
+          }}
+          error={fieldErrors.confirmPassword}
           required
         />
 

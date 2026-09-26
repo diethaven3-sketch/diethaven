@@ -8,6 +8,7 @@ import {
   MEAL_TYPE_ORDER,
   formatPesStatement,
   interventionCreateSchema,
+  validateWithSchema,
   type InterventionStatus,
   type Meal,
   type MealPlanInput,
@@ -98,11 +99,22 @@ function InterventionForm({
   const [prescription, setPrescription] = useState(emptyPrescription);
   const [includeMealPlan, setIncludeMealPlan] = useState(false);
   const [mealPlan, setMealPlan] = useState<MealPlanInput>(emptyMealPlan());
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   // An intervention answers a diagnosis, so anything ruled out is not offered.
   const selectable = diagnoses.filter((diagnosis) => diagnosis.status !== "RULED_OUT");
+
+  const clearFieldError = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -112,29 +124,41 @@ function InterventionForm({
       ? { ...mealPlan, meals: mealPlan.meals.filter((meal) => meal.items.length > 0) }
       : undefined;
 
-    const parsed = interventionCreateSchema.safeParse({
+    const payload = {
       patientId,
       diagnosisId,
-      carePlanDetails,
+      carePlanDetails: carePlanDetails.trim(),
       prescription: toPrescription(prescription),
       ...(plan ? { mealPlan: plan } : {}),
-    });
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "Check the form and retry.");
+    };
+
+    const validation = validateWithSchema(interventionCreateSchema, payload);
+    if (!validation.success) {
+      setFieldErrors(validation.errors);
+      setError(validation.firstError);
       return;
     }
+    setFieldErrors({});
 
     setSubmitting(true);
     try {
-      await apiFetch("/interventions", { method: "POST", token, body: parsed.data });
+      await apiFetch("/interventions", { method: "POST", token, body: validation.data });
       setDiagnosisId("");
       setCarePlanDetails("");
       setPrescription(emptyPrescription);
       setIncludeMealPlan(false);
       setMealPlan(emptyMealPlan());
+      setFieldErrors({});
       onSaved();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to save intervention.");
+      if (err instanceof ApiError) {
+        setError(err.message);
+        if (Object.keys(err.fieldErrors).length > 0) {
+          setFieldErrors((prev) => ({ ...prev, ...err.fieldErrors }));
+        }
+      } else {
+        setError("Failed to save intervention.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -166,7 +190,11 @@ function InterventionForm({
           label="Diagnosis this intervention addresses"
           name="diagnosisId"
           value={diagnosisId}
-          onChange={(e) => setDiagnosisId(e.target.value)}
+          onChange={(e) => {
+            setDiagnosisId(e.target.value);
+            clearFieldError("diagnosisId");
+          }}
+          error={fieldErrors.diagnosisId}
           required
         >
           <option value="">Select a diagnosis…</option>
@@ -183,8 +211,12 @@ function InterventionForm({
           name="carePlanDetails"
           rows={5}
           value={carePlanDetails}
-          onChange={(e) => setCarePlanDetails(e.target.value)}
+          onChange={(e) => {
+            setCarePlanDetails(e.target.value);
+            clearFieldError("carePlanDetails");
+          }}
           hint="Goals, strategy, and education to be delivered."
+          error={fieldErrors.carePlanDetails}
           required
         />
 

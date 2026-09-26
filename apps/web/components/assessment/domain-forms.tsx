@@ -143,7 +143,9 @@ function AnthropometricForm({ patientId, onSaved }: DomainFormProps) {
       saver={saver}
       onSubmit={async (e) => {
         e.preventDefault();
-        if (await saver.save({ height: Number(height), weight: Number(weight) })) {
+        const h = height.trim() ? Number(height) : undefined;
+        const w = weight.trim() ? Number(weight) : undefined;
+        if (await saver.save({ height: h, weight: w })) {
           setHeight("");
           setWeight("");
         }
@@ -157,7 +159,11 @@ function AnthropometricForm({ patientId, onSaved }: DomainFormProps) {
           step="0.1"
           name="height"
           value={height}
-          onChange={(e) => setHeight(e.target.value)}
+          onChange={(e) => {
+            setHeight(e.target.value);
+            saver.clearFieldError("height");
+          }}
+          error={saver.fieldErrors.height}
           required
         />
         <Field
@@ -167,7 +173,11 @@ function AnthropometricForm({ patientId, onSaved }: DomainFormProps) {
           step="0.1"
           name="weight"
           value={weight}
-          onChange={(e) => setWeight(e.target.value)}
+          onChange={(e) => {
+            setWeight(e.target.value);
+            saver.clearFieldError("weight");
+          }}
+          error={saver.fieldErrors.weight}
           required
         />
       </div>
@@ -194,7 +204,7 @@ function BiochemicalForm({ patientId, onSaved }: DomainFormProps) {
           marker,
           value: Number(values[marker]),
         }));
-        if (await saver.save({ testDate, values: rows, ...(notes ? { notes } : {}) })) {
+        if (await saver.save({ testDate, values: rows, ...(notes.trim() ? { notes: notes.trim() } : {}) })) {
           setTestDate("");
           setNotes("");
           setValues({});
@@ -206,7 +216,11 @@ function BiochemicalForm({ patientId, onSaved }: DomainFormProps) {
         type="date"
         name="testDate"
         value={testDate}
-        onChange={(e) => setTestDate(e.target.value)}
+        onChange={(e) => {
+          setTestDate(e.target.value);
+          saver.clearFieldError("testDate");
+        }}
+        error={saver.fieldErrors.testDate}
         required
         className="sm:max-w-xs"
       />

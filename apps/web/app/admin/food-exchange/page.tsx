@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { foodExchangeItemCreateSchema, exchangeGroupSchema, type ExchangeGroup } from "@repo/types";
+import { foodExchangeItemCreateSchema, exchangeGroupSchema, validateWithSchema, type ExchangeGroup } from "@repo/types";
 import { Plus, Utensils, Edit2, Trash2, SearchX } from "lucide-react";
 import { apiFetch, ApiError } from "../../../lib/api-client";
 import { useAuth } from "../../../lib/auth-context";
@@ -78,14 +78,28 @@ function ItemFormModal({
         }
       : emptyForm,
   );
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const update = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
+  const clearFieldError = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
+
+  const update = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm((f) => ({ ...f, [key]: e.target.value }));
+    clearFieldError(key);
+  };
 
   const onGroupChange = (val: string) => {
     setForm((f) => ({ ...f, exchangeGroup: val as ExchangeGroup }));
+    clearFieldError("exchangeGroup");
   };
 
   const onSubmit = async (event: FormEvent) => {
@@ -93,32 +107,41 @@ function ItemFormModal({
     setError(null);
 
     const payload = {
-      foodName: form.foodName,
+      foodName: form.foodName.trim(),
       exchangeGroup: form.exchangeGroup,
-      portionSize: form.portionSize,
-      calories: form.calories ? Number(form.calories) : undefined,
-      carbsG: form.carbsG ? Number(form.carbsG) : undefined,
-      proteinG: form.proteinG ? Number(form.proteinG) : undefined,
-      fatG: form.fatG ? Number(form.fatG) : undefined,
+      portionSize: form.portionSize.trim(),
+      calories: form.calories.trim() ? Number(form.calories) : undefined,
+      carbsG: form.carbsG.trim() ? Number(form.carbsG) : undefined,
+      proteinG: form.proteinG.trim() ? Number(form.proteinG) : undefined,
+      fatG: form.fatG.trim() ? Number(form.fatG) : undefined,
     };
 
-    const parsed = foodExchangeItemCreateSchema.safeParse(payload);
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "Invalid input.");
+    const validation = validateWithSchema(foodExchangeItemCreateSchema, payload);
+    if (!validation.success) {
+      setFieldErrors(validation.errors);
+      setError(validation.firstError);
       return;
     }
+    setFieldErrors({});
 
     setSubmitting(true);
     try {
       if (initial) {
-        await apiFetch(`/admin/food-exchange-items/${initial.id}`, { method: "PATCH", token, body: parsed.data });
+        await apiFetch(`/admin/food-exchange-items/${initial.id}`, { method: "PATCH", token, body: validation.data });
       } else {
-        await apiFetch("/admin/food-exchange-items", { method: "POST", token, body: parsed.data });
+        await apiFetch("/admin/food-exchange-items", { method: "POST", token, body: validation.data });
       }
       onSaved();
       onClose();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to save item.");
+      if (err instanceof ApiError) {
+        setError(err.message);
+        if (Object.keys(err.fieldErrors).length > 0) {
+          setFieldErrors((prev) => ({ ...prev, ...err.fieldErrors }));
+        }
+      } else {
+        setError("Failed to save item.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -138,6 +161,7 @@ function ItemFormModal({
           placeholder="e.g. Jollof Rice, Pounded Yam, Moin-moin"
           value={form.foodName}
           onChange={update("foodName")}
+          error={fieldErrors.foodName}
           required
         />
         <CustomSelect
@@ -152,6 +176,7 @@ function ItemFormModal({
           placeholder="e.g. 1 medium wrap (150g), 1/2 cup cooked"
           value={form.portionSize}
           onChange={update("portionSize")}
+          error={fieldErrors.portionSize}
           required
         />
         <div className="grid grid-cols-2 gap-4">
@@ -162,6 +187,7 @@ function ItemFormModal({
             placeholder="e.g. 120"
             value={form.calories}
             onChange={update("calories")}
+            error={fieldErrors.calories}
           />
           <Field
             label="Carbs (g)"
@@ -170,6 +196,7 @@ function ItemFormModal({
             placeholder="e.g. 25"
             value={form.carbsG}
             onChange={update("carbsG")}
+            error={fieldErrors.carbsG}
           />
           <Field
             label="Protein (g)"
@@ -178,6 +205,7 @@ function ItemFormModal({
             placeholder="e.g. 3"
             value={form.proteinG}
             onChange={update("proteinG")}
+            error={fieldErrors.proteinG}
           />
           <Field
             label="Fat (g)"
@@ -186,6 +214,7 @@ function ItemFormModal({
             placeholder="e.g. 1"
             value={form.fatG}
             onChange={update("fatG")}
+            error={fieldErrors.fatG}
           />
         </div>
         <div className="flex justify-end gap-2 mt-4 pt-2 border-t border-gray-100">

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
 import { Text } from "react-native";
-import { resetPasswordSchema } from "@repo/types";
+import { resetPasswordSchema, validateWithSchema } from "@repo/types";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { Screen } from "@/components/screen";
 import { Button } from "@/components/ui/button";
@@ -13,25 +13,50 @@ export default function ResetPassword() {
   const [email, setEmail] = useState(params.email ?? "");
   const [code, setCode] = useState(params.devResetCode ?? "");
   const [newPassword, setNewPassword] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  const clearFieldError = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
+
   const onSubmit = async () => {
     setError(null);
-    const parsed = resetPasswordSchema.safeParse({ email, code, newPassword });
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "Check the code and new password.");
+    const payload = {
+      email: email.trim(),
+      code: code.trim(),
+      newPassword,
+    };
+    const validation = validateWithSchema(resetPasswordSchema, payload);
+    if (!validation.success) {
+      setFieldErrors(validation.errors);
+      setError(validation.firstError);
       return;
     }
+    setFieldErrors({});
 
     setSubmitting(true);
     try {
-      await apiFetch("/auth/reset-password", { method: "POST", body: parsed.data });
+      await apiFetch("/auth/reset-password", { method: "POST", body: validation.data });
       setSuccess(true);
       setTimeout(() => router.replace("/(auth)/login"), 1200);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Invalid or expired code.");
+      if (err instanceof ApiError) {
+        setError(err.message);
+        if (Object.keys(err.fieldErrors).length > 0) {
+          setFieldErrors((prev) => ({ ...prev, ...err.fieldErrors }));
+        }
+      } else {
+        setError("Invalid or expired code.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -49,13 +74,36 @@ export default function ResetPassword() {
       <TextField
         label="Email"
         value={email}
-        onChangeText={setEmail}
+        onChangeText={(text) => {
+          setEmail(text);
+          clearFieldError("email");
+        }}
+        error={fieldErrors.email}
         keyboardType="email-address"
         autoCapitalize="none"
         autoCorrect={false}
       />
-      <TextField label="Reset code" value={code} onChangeText={setCode} keyboardType="number-pad" maxLength={6} />
-      <TextField label="New password" value={newPassword} onChangeText={setNewPassword} secureTextEntry />
+      <TextField
+        label="Reset code"
+        value={code}
+        onChangeText={(text) => {
+          setCode(text);
+          clearFieldError("code");
+        }}
+        error={fieldErrors.code}
+        keyboardType="number-pad"
+        maxLength={6}
+      />
+      <TextField
+        label="New password"
+        value={newPassword}
+        onChangeText={(text) => {
+          setNewPassword(text);
+          clearFieldError("newPassword");
+        }}
+        error={fieldErrors.newPassword}
+        secureTextEntry
+      />
 
       <Button onPress={onSubmit} loading={submitting}>
         Reset password

@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { dietitianRegisterSchema } from "@repo/types";
+import { dietitianRegisterSchema, validateWithSchema } from "@repo/types";
 import { apiFetch, ApiError } from "../../lib/api-client";
 import { useAuth } from "../../lib/auth-context";
 import { Button } from "../../components/ui/button";
@@ -29,21 +29,29 @@ export default function RegisterPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const update = (key: keyof typeof initialForm) => (e: React.ChangeEvent<HTMLInputElement>) =>
+  const clearFieldError = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
+
+  const update = (key: keyof typeof initialForm) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm((f) => ({ ...f, [key]: e.target.value }));
+    clearFieldError(key);
+  };
 
   const validate = () => {
-    const payload = { ...form, phone: form.phone || undefined };
-    const result = dietitianRegisterSchema.safeParse(payload);
+    const payload = { ...form, phone: form.phone.trim() || undefined };
+    const result = validateWithSchema(dietitianRegisterSchema, payload);
     if (result.success) {
       setFieldErrors({});
       return true;
     }
-    const errors: Record<string, string> = {};
-    for (const issue of result.error.issues) {
-      errors[String(issue.path[0])] = issue.message;
-    }
-    setFieldErrors(errors);
+    setFieldErrors(result.errors);
     return false;
   };
 
@@ -56,12 +64,19 @@ export default function RegisterPage() {
     try {
       const { accessToken } = await apiFetch<{ accessToken: string }>("/auth/dietitian/register", {
         method: "POST",
-        body: { ...form, phone: form.phone || undefined },
+        body: { ...form, phone: form.phone.trim() || undefined },
       });
       login(accessToken);
       router.replace("/dashboard");
     } catch (error) {
-      setFormError(error instanceof ApiError ? error.message : "Something went wrong. Please try again.");
+      if (error instanceof ApiError) {
+        setFormError(error.message);
+        if (Object.keys(error.fieldErrors).length > 0) {
+          setFieldErrors((prev) => ({ ...prev, ...error.fieldErrors }));
+        }
+      } else {
+        setFormError("Something went wrong. Please try again.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -78,13 +93,70 @@ export default function RegisterPage() {
         <form className="mt-6 flex flex-col gap-4" onSubmit={onSubmit} noValidate>
           {formError ? <Banner tone="danger">{formError}</Banner> : null}
 
-          <Field label="Full name" name="name" value={form.name} onChange={update("name")} onBlur={validate} error={fieldErrors.name} required />
-          <Field label="Email" type="email" name="email" value={form.email} onChange={update("email")} onBlur={validate} error={fieldErrors.email} required />
-          <Field label="Password" type="password" name="password" value={form.password} onChange={update("password")} onBlur={validate} error={fieldErrors.password} required />
-          <Field label="Phone (optional)" name="phone" value={form.phone} onChange={update("phone")} onBlur={validate} error={fieldErrors.phone} />
-          <Field label="License number" name="licenseNumber" value={form.licenseNumber} onChange={update("licenseNumber")} onBlur={validate} error={fieldErrors.licenseNumber} required />
-          <Field label="Specialty" name="specialty" value={form.specialty} onChange={update("specialty")} onBlur={validate} error={fieldErrors.specialty} required />
-          <Field label="Facility" name="facility" value={form.facility} onChange={update("facility")} onBlur={validate} error={fieldErrors.facility} required />
+          <Field
+            label="Full name"
+            name="name"
+            value={form.name}
+            onChange={update("name")}
+            onBlur={validate}
+            error={fieldErrors.name}
+            required
+          />
+          <Field
+            label="Email"
+            type="email"
+            name="email"
+            value={form.email}
+            onChange={update("email")}
+            onBlur={validate}
+            error={fieldErrors.email}
+            required
+          />
+          <Field
+            label="Password"
+            type="password"
+            name="password"
+            value={form.password}
+            onChange={update("password")}
+            onBlur={validate}
+            error={fieldErrors.password}
+            required
+          />
+          <Field
+            label="Phone (optional)"
+            name="phone"
+            value={form.phone}
+            onChange={update("phone")}
+            onBlur={validate}
+            error={fieldErrors.phone}
+          />
+          <Field
+            label="License number"
+            name="licenseNumber"
+            value={form.licenseNumber}
+            onChange={update("licenseNumber")}
+            onBlur={validate}
+            error={fieldErrors.licenseNumber}
+            required
+          />
+          <Field
+            label="Specialty"
+            name="specialty"
+            value={form.specialty}
+            onChange={update("specialty")}
+            onBlur={validate}
+            error={fieldErrors.specialty}
+            required
+          />
+          <Field
+            label="Facility"
+            name="facility"
+            value={form.facility}
+            onChange={update("facility")}
+            onBlur={validate}
+            error={fieldErrors.facility}
+            required
+          />
 
           <Button type="submit" loading={submitting} className="mt-2 w-full">
             Create account

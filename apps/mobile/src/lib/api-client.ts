@@ -1,13 +1,20 @@
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:4000";
 
 export class ApiError extends Error {
+  public fieldErrors: Record<string, string>;
+  public formErrors: string[];
+
   constructor(
     message: string,
     public status: number,
     public body: unknown,
+    fieldErrors: Record<string, string> = {},
+    formErrors: string[] = [],
   ) {
     super(message);
     this.name = "ApiError";
+    this.fieldErrors = fieldErrors;
+    this.formErrors = formErrors;
   }
 }
 
@@ -36,13 +43,56 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   const data = await res.json().catch(() => undefined);
 
   if (!res.ok) {
-    const message =
-      typeof data?.message === "string"
-        ? data.message
-        : Array.isArray(data?.message)
-          ? data.message.join(", ")
-          : `Request failed with status ${res.status}`;
-    throw new ApiError(message, res.status, data);
+    let message = `Request failed with status ${res.status}`;
+    const fieldErrors: Record<string, string> = {};
+    const formErrors: string[] = [];
+
+    if (data && typeof data === "object") {
+      const rawObj = data as Record<string, unknown>;
+
+      const rawFieldErrors =
+        rawObj.fieldErrors && typeof rawObj.fieldErrors === "object"
+          ? (rawObj.fieldErrors as Record<string, unknown>)
+          : rawObj.message && typeof rawObj.message === "object" && "fieldErrors" in (rawObj.message as Record<string, unknown>)
+            ? ((rawObj.message as Record<string, unknown>).fieldErrors as Record<string, unknown>)
+            : null;
+
+      if (rawFieldErrors) {
+        for (const [key, val] of Object.entries(rawFieldErrors)) {
+          if (typeof val === "string") {
+            fieldErrors[key] = val;
+          } else if (Array.isArray(val) && val.length > 0 && typeof val[0] === "string") {
+            fieldErrors[key] = val[0];
+          }
+        }
+      }
+
+      const rawFormErrors = Array.isArray(rawObj.formErrors)
+        ? rawObj.formErrors
+        : rawObj.message && typeof rawObj.message === "object" && Array.isArray((rawObj.message as Record<string, unknown>).formErrors)
+          ? ((rawObj.message as Record<string, unknown>).formErrors as unknown[])
+          : null;
+
+      if (rawFormErrors) {
+        for (const err of rawFormErrors) {
+          if (typeof err === "string") formErrors.push(err);
+        }
+      }
+
+      if (typeof rawObj.message === "string") {
+        message = rawObj.message;
+      } else if (Array.isArray(rawObj.message)) {
+        message = rawObj.message.join(", ");
+      } else if (formErrors.length > 0) {
+        message = formErrors[0];
+      } else if (Object.values(fieldErrors).length > 0) {
+        message = Object.values(fieldErrors)[0];
+      } else if (typeof rawObj.error === "string") {
+        message = rawObj.error;
+      }
+    }
+
+    throw new ApiError(message, res.status, data, fieldErrors, formErrors);
   }
 
   return data as T;

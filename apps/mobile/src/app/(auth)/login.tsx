@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, router } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
 import { Pressable, Text } from "react-native";
-import { loginSchema } from "@repo/types";
+import { loginSchema, validateWithSchema } from "@repo/types";
 import { colors } from "@repo/ui-tokens";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
@@ -19,15 +19,22 @@ export default function Login() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const clearFieldError = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
+
   const onSubmit = async () => {
     setFormError(null);
-    const parsed = loginSchema.safeParse({ email, password });
-    if (!parsed.success) {
-      const errors: Record<string, string> = {};
-      for (const issue of parsed.error.issues) {
-        errors[String(issue.path[0])] = issue.message;
-      }
-      setFieldErrors(errors);
+    const validation = validateWithSchema(loginSchema, { email: email.trim(), password });
+    if (!validation.success) {
+      setFieldErrors(validation.errors);
+      setFormError(validation.firstError);
       return;
     }
     setFieldErrors({});
@@ -36,12 +43,19 @@ export default function Login() {
     try {
       const { accessToken } = await apiFetch<{ accessToken: string }>("/auth/login", {
         method: "POST",
-        body: parsed.data,
+        body: validation.data,
       });
       await login(accessToken);
       router.replace("/(app)/(tabs)/home");
     } catch (err) {
-      setFormError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
+      if (err instanceof ApiError) {
+        setFormError(err.message);
+        if (Object.keys(err.fieldErrors).length > 0) {
+          setFieldErrors((prev) => ({ ...prev, ...err.fieldErrors }));
+        }
+      } else {
+        setFormError("Something went wrong. Please try again.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -66,13 +80,25 @@ export default function Login() {
       <TextField
         label="Email"
         value={email}
-        onChangeText={setEmail}
+        onChangeText={(text) => {
+          setEmail(text);
+          clearFieldError("email");
+        }}
         error={fieldErrors.email}
         keyboardType="email-address"
         autoCapitalize="none"
         autoCorrect={false}
       />
-      <TextField label="Password" value={password} onChangeText={setPassword} error={fieldErrors.password} secureTextEntry />
+      <TextField
+        label="Password"
+        value={password}
+        onChangeText={(text) => {
+          setPassword(text);
+          clearFieldError("password");
+        }}
+        error={fieldErrors.password}
+        secureTextEntry
+      />
 
       <Button onPress={onSubmit} loading={submitting}>
         Log in

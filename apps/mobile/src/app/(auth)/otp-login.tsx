@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, router } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
 import { Pressable, Text, View } from "react-native";
-import { otpRequestSchema } from "@repo/types";
+import { otpRequestSchema, validateWithSchema } from "@repo/types";
 import { colors } from "@repo/ui-tokens";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { Screen } from "@/components/screen";
@@ -12,26 +12,46 @@ import { Banner } from "@/components/ui/banner";
 
 export default function OtpLogin() {
   const [email, setEmail] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const clearFieldError = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
+
   const onSubmit = async () => {
     setError(null);
-    const parsed = otpRequestSchema.safeParse({ email });
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "Enter a valid email.");
+    const validation = validateWithSchema(otpRequestSchema, { email: email.trim() });
+    if (!validation.success) {
+      setFieldErrors(validation.errors);
+      setError(validation.firstError);
       return;
     }
+    setFieldErrors({});
 
     setSubmitting(true);
     try {
       const res = await apiFetch<{ message: string; devOtp?: string }>("/auth/otp/request", {
         method: "POST",
-        body: parsed.data,
+        body: validation.data,
       });
-      router.push({ pathname: "/(auth)/otp-verify", params: { email, devOtp: res.devOtp } });
+      router.push({ pathname: "/(auth)/otp-verify", params: { email: email.trim(), devOtp: res.devOtp } });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
+      if (err instanceof ApiError) {
+        setError(err.message);
+        if (Object.keys(err.fieldErrors).length > 0) {
+          setFieldErrors((prev) => ({ ...prev, ...err.fieldErrors }));
+        }
+      } else {
+        setError("Something went wrong. Please try again.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -61,7 +81,12 @@ export default function OtpLogin() {
       <TextField
         label="Email"
         value={email}
-        onChangeText={setEmail}
+        onChangeText={(text) => {
+          setEmail(text);
+          clearFieldError("email");
+          if (error) setError(null);
+        }}
+        error={fieldErrors.email}
         placeholder="you@example.com"
         keyboardType="email-address"
         autoCapitalize="none"

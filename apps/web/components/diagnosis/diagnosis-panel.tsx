@@ -7,6 +7,7 @@ import {
   DIAGNOSIS_STATUS_LABELS,
   diagnosisCreateSchema,
   formatPesStatement,
+  validateWithSchema,
   type DiagnosisDomain,
   type DiagnosisEvidence,
   type DiagnosisStatus,
@@ -98,6 +99,7 @@ function DiagnosisForm({
   const [etiology, setEtiology] = useState("");
   const [signsSymptoms, setSignsSymptoms] = useState("");
   const [selected, setSelected] = useState<Map<string, EvidenceOption>>(new Map());
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -107,6 +109,16 @@ function DiagnosisForm({
   const selectedTerm = libraryTerms.find((term) => term.code === problemChoice);
   const problem = problemChoice === FREE_TEXT ? customProblem : (selectedTerm?.label ?? "");
   const problemCode = problemChoice === FREE_TEXT ? undefined : selectedTerm?.code;
+
+  const clearFieldError = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
 
   const toggleEvidence = (option: EvidenceOption) => {
     setSelected((current) => {
@@ -119,7 +131,10 @@ function DiagnosisForm({
 
   const applyEvidenceToText = () => {
     const sentence = evidenceToSentence([...selected.values()]);
-    if (sentence) setSignsSymptoms(sentence);
+    if (sentence) {
+      setSignsSymptoms(sentence);
+      clearFieldError("signsSymptoms");
+    }
   };
 
   const reset = () => {
@@ -128,6 +143,7 @@ function DiagnosisForm({
     setEtiology("");
     setSignsSymptoms("");
     setSelected(new Map());
+    setFieldErrors({});
   };
 
   const onSubmit = async (event: FormEvent) => {
@@ -147,28 +163,39 @@ function DiagnosisForm({
     // a diagnosis drawn from several rows stays linked through evidence instead.
     const assessmentIds = new Set(evidence.map((item) => item.assessmentId));
 
-    const parsed = diagnosisCreateSchema.safeParse({
+    const payload = {
       patientId,
       domain,
-      problem,
+      problem: problem.trim(),
       problemCode,
-      etiology,
-      signsSymptoms,
+      etiology: etiology.trim(),
+      signsSymptoms: signsSymptoms.trim(),
       evidence,
       ...(assessmentIds.size === 1 ? { assessmentId: [...assessmentIds][0] } : {}),
-    });
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "Check the form and retry.");
+    };
+
+    const validation = validateWithSchema(diagnosisCreateSchema, payload);
+    if (!validation.success) {
+      setFieldErrors(validation.errors);
+      setError(validation.firstError);
       return;
     }
+    setFieldErrors({});
 
     setSubmitting(true);
     try {
-      await apiFetch("/diagnoses", { method: "POST", token, body: parsed.data });
+      await apiFetch("/diagnoses", { method: "POST", token, body: validation.data });
       reset();
       onSaved();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to save diagnosis.");
+      if (err instanceof ApiError) {
+        setError(err.message);
+        if (Object.keys(err.fieldErrors).length > 0) {
+          setFieldErrors((prev) => ({ ...prev, ...err.fieldErrors }));
+        }
+      } else {
+        setError("Failed to save diagnosis.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -192,6 +219,7 @@ function DiagnosisForm({
             onChange={(e) => {
               setDomain(e.target.value as DiagnosisDomain);
               setProblemChoice("");
+              clearFieldError("domain");
             }}
           >
             {DOMAINS.map((value) => (
@@ -205,7 +233,11 @@ function DiagnosisForm({
             label="Problem (diagnostic label)"
             name="problem"
             value={problemChoice}
-            onChange={(e) => setProblemChoice(e.target.value)}
+            onChange={(e) => {
+              setProblemChoice(e.target.value);
+              clearFieldError("problem");
+            }}
+            error={fieldErrors.problem}
             required
           >
             <option value="">Select a problem…</option>
@@ -223,7 +255,11 @@ function DiagnosisForm({
             label="Problem"
             name="customProblem"
             value={customProblem}
-            onChange={(e) => setCustomProblem(e.target.value)}
+            onChange={(e) => {
+              setCustomProblem(e.target.value);
+              clearFieldError("problem");
+            }}
+            error={fieldErrors.problem}
             required
           />
         ) : null}
@@ -232,8 +268,12 @@ function DiagnosisForm({
           label="Etiology (related to)"
           name="etiology"
           value={etiology}
-          onChange={(e) => setEtiology(e.target.value)}
+          onChange={(e) => {
+            setEtiology(e.target.value);
+            clearFieldError("etiology");
+          }}
           placeholder="limited nutrition-related knowledge"
+          error={fieldErrors.etiology}
           required
         />
 
@@ -255,7 +295,11 @@ function DiagnosisForm({
           label="Signs & symptoms (as evidenced by)"
           name="signsSymptoms"
           value={signsSymptoms}
-          onChange={(e) => setSignsSymptoms(e.target.value)}
+          onChange={(e) => {
+            setSignsSymptoms(e.target.value);
+            clearFieldError("signsSymptoms");
+          }}
+          error={fieldErrors.signsSymptoms}
           required
         />
 

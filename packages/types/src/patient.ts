@@ -7,8 +7,8 @@ import { sexSchema } from "./invites";
  * the dietitian, not a self-service profile edit.
  */
 export const updatePatientProfileSchema = z.object({
-  dateOfBirth: z.string().date().optional(),
+  dateOfBirth: z.string().date("Please enter a valid date of birth (YYYY-MM-DD)").optional(),
   sex: sexSchema.optional(),
-  contact: z.string().optional(),
+  contact: z.string().trim().max(100).optional(),
 });
 export type UpdatePatientProfileInput = z.infer<typeof updatePatientProfileSchema>;

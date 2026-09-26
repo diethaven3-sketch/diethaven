@@ -2,7 +2,7 @@ import { useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
 import { Pressable, Text } from "react-native";
-import { acceptInviteSchema } from "@repo/types";
+import { acceptInviteSchema, validateWithSchema } from "@repo/types";
 import { colors } from "@repo/ui-tokens";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
@@ -43,7 +43,20 @@ export default function AcceptInvite() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const update = (key: keyof typeof initialForm) => (value: string) => setForm((f) => ({ ...f, [key]: value }));
+  const clearFieldError = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
+
+  const update = (key: keyof typeof initialForm) => (value: string | "MALE" | "FEMALE" | "OTHER" | null) => {
+    setForm((f) => ({ ...f, [key]: value }));
+    clearFieldError(key);
+  };
 
   const checkToken = async () => {
     setCheckError(null);
@@ -68,22 +81,23 @@ export default function AcceptInvite() {
     setFormError(null);
 
     if (!consentAccepted) {
-      setFieldErrors({ consent: "You must accept the consent statement to continue." });
+      setFieldErrors((prev) => ({ ...prev, consent: "You must accept the consent statement to continue." }));
+      setFormError("You must accept the consent statement to continue.");
       return;
     }
 
-    const parsed = acceptInviteSchema.safeParse({
+    const payload = {
       ...form,
-      phone: form.phone || undefined,
-      contact: form.contact || undefined,
+      name: form.name.trim(),
+      phone: form.phone.trim() || undefined,
+      contact: form.contact.trim() || undefined,
       consentAccepted: true,
-    });
-    if (!parsed.success) {
-      const errors: Record<string, string> = {};
-      for (const issue of parsed.error.issues) {
-        errors[String(issue.path[0])] = issue.message;
-      }
-      setFieldErrors(errors);
+    };
+
+    const validation = validateWithSchema(acceptInviteSchema, payload);
+    if (!validation.success) {
+      setFieldErrors(validation.errors);
+      setFormError(validation.firstError);
       return;
     }
     setFieldErrors({});
@@ -92,12 +106,19 @@ export default function AcceptInvite() {
     try {
       const { accessToken } = await apiFetch<{ accessToken: string }>(`/invites/${token.trim()}/accept`, {
         method: "POST",
-        body: parsed.data,
+        body: validation.data,
       });
       await login(accessToken);
       router.replace("/(app)/(tabs)/home");
     } catch (err) {
-      setFormError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
+      if (err instanceof ApiError) {
+        setFormError(err.message);
+        if (Object.keys(err.fieldErrors).length > 0) {
+          setFieldErrors((prev) => ({ ...prev, ...err.fieldErrors }));
+        }
+      } else {
+        setFormError("Something went wrong. Please try again.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -148,7 +169,7 @@ export default function AcceptInvite() {
         error={fieldErrors.password}
         secureTextEntry
       />
-      <TextField label="Phone (optional)" value={form.phone} onChangeText={update("phone")} keyboardType="phone-pad" />
+      <TextField label="Phone (optional)" value={form.phone} onChangeText={update("phone")} error={fieldErrors.phone} keyboardType="phone-pad" />
       <TextField
         label="Date of birth"
         placeholder="YYYY-MM-DD"
@@ -160,19 +181,23 @@ export default function AcceptInvite() {
       <SegmentedControl
         label="Sex"
         value={form.sex}
-        onChange={(value) => setForm((f) => ({ ...f, sex: value }))}
+        onChange={update("sex")}
+        error={fieldErrors.sex}
         options={[
           { value: "MALE", label: "Male" },
           { value: "FEMALE", label: "Female" },
           { value: "OTHER", label: "Other" },
         ]}
       />
-      <TextField label="Contact address (optional)" value={form.contact} onChangeText={update("contact")} />
+      <TextField label="Contact address (optional)" value={form.contact} onChangeText={update("contact")} error={fieldErrors.contact} />
 
       <ConsentBox
         label="I consent to DietHaven collecting and processing my health data in line with the NDPA 2023."
         checked={consentAccepted}
-        onChange={setConsentAccepted}
+        onChange={(checked) => {
+          setConsentAccepted(checked);
+          clearFieldError("consent");
+        }}
         error={fieldErrors.consent}
       />
 

@@ -3,7 +3,7 @@ import { router } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { updatePatientProfileSchema, updateProfileSchema } from "@repo/types";
+import { updatePatientProfileSchema, updateProfileSchema, validateWithSchema } from "@repo/types";
 import { colors } from "@repo/ui-tokens";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
@@ -33,35 +33,54 @@ function EditProfileForm({ account, clinical }: { account: PatientProfile; clini
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const clearFieldError = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
+
   const onSubmit = async () => {
     setFormError(null);
 
-    const parsedAccount = updateProfileSchema.safeParse({ name, phone });
-    const parsedClinical = updatePatientProfileSchema.safeParse({ dateOfBirth, sex, contact });
+    const valAccount = validateWithSchema(updateProfileSchema, {
+      name: name.trim() || undefined,
+      phone: phone.trim() || undefined,
+    });
+    const valClinical = validateWithSchema(updatePatientProfileSchema, {
+      dateOfBirth: dateOfBirth.trim() || undefined,
+      sex: sex ?? undefined,
+      contact: contact.trim() || undefined,
+    });
 
-    if (!parsedAccount.success || !parsedClinical.success) {
-      const errors: Record<string, string> = {};
-      for (const issue of [
-        ...(parsedAccount.success ? [] : parsedAccount.error.issues),
-        ...(parsedClinical.success ? [] : parsedClinical.error.issues),
-      ]) {
-        errors[String(issue.path[0])] = issue.message;
-      }
-      setFieldErrors(errors);
+    if (!valAccount.success || !valClinical.success) {
+      const combinedErrors: Record<string, string> = {
+        ...(valAccount.success ? {} : valAccount.errors),
+        ...(valClinical.success ? {} : valClinical.errors),
+      };
+      setFieldErrors(combinedErrors);
+      setFormError(valAccount.firstError ?? valClinical.firstError ?? "Please correct the form fields.");
       return;
     }
     setFieldErrors({});
 
     setSubmitting(true);
     try {
-      // Two endpoints because the account fields live on User and the personal
-      // details on PatientProfile. Account first, so a validation failure on the
-      // clinical half doesn't leave the name half unsaved without explanation.
-      await apiFetch("/auth/profile", { method: "PATCH", token, body: parsedAccount.data });
-      await apiFetch("/patient/profile", { method: "PATCH", token, body: parsedClinical.data });
+      await apiFetch("/auth/profile", { method: "PATCH", token, body: valAccount.data });
+      await apiFetch("/patient/profile", { method: "PATCH", token, body: valClinical.data });
       router.back();
     } catch (err) {
-      setFormError(err instanceof ApiError ? err.message : "Couldn't save your changes. Please try again.");
+      if (err instanceof ApiError) {
+        setFormError(err.message);
+        if (Object.keys(err.fieldErrors).length > 0) {
+          setFieldErrors((prev) => ({ ...prev, ...err.fieldErrors }));
+        }
+      } else {
+        setFormError("Couldn't save your changes. Please try again.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -75,14 +94,20 @@ function EditProfileForm({ account, clinical }: { account: PatientProfile; clini
       <TextField
         label="Full name"
         value={name}
-        onChangeText={setName}
+        onChangeText={(text) => {
+          setName(text);
+          clearFieldError("name");
+        }}
         error={fieldErrors.name}
         autoCapitalize="words"
       />
       <TextField
         label="Phone"
         value={phone}
-        onChangeText={setPhone}
+        onChangeText={(text) => {
+          setPhone(text);
+          clearFieldError("phone");
+        }}
         error={fieldErrors.phone}
         keyboardType="phone-pad"
       />
@@ -92,21 +117,35 @@ function EditProfileForm({ account, clinical }: { account: PatientProfile; clini
         label="Date of birth"
         placeholder="YYYY-MM-DD"
         value={dateOfBirth}
-        onChangeText={setDateOfBirth}
+        onChangeText={(text) => {
+          setDateOfBirth(text);
+          clearFieldError("dateOfBirth");
+        }}
         error={fieldErrors.dateOfBirth}
         keyboardType="numbers-and-punctuation"
       />
       <SegmentedControl
         label="Sex"
         value={sex}
-        onChange={setSex}
+        onChange={(val) => {
+          setSex(val);
+          clearFieldError("sex");
+        }}
         options={[
           { value: "MALE", label: "Male" },
           { value: "FEMALE", label: "Female" },
           { value: "OTHER", label: "Other" },
         ]}
       />
-      <TextField label="Contact address" value={contact} onChangeText={setContact} error={fieldErrors.contact} />
+      <TextField
+        label="Contact address"
+        value={contact}
+        onChangeText={(text) => {
+          setContact(text);
+          clearFieldError("contact");
+        }}
+        error={fieldErrors.contact}
+      />
 
       <Note>
         Your email address and your measurements are managed by your dietitian. Changes to your contact details are

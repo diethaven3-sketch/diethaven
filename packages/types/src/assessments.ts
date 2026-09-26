@@ -34,7 +34,7 @@ export const ASSESSMENT_DOMAIN_ORDER: AssessmentDomain[] = [
 // ---------------------------------------------------------------------------
 
 /** Free-text clinical narrative. Trimmed, and capped so a stray paste can't bloat a row. */
-const note = z.string().trim().max(4000).optional();
+const note = z.string().trim().max(4000, "Notes cannot exceed 4000 characters").optional();
 
 export const patientHistoryDataSchema = z.object({
   personalSocialHistory: note,
@@ -46,8 +46,14 @@ export type PatientHistoryData = z.infer<typeof patientHistoryDataSchema>;
 
 /** Height in cm, weight in kg. BMI is derived server-side, never sent by the client. */
 export const anthropometricDataSchema = z.object({
-  height: z.number().positive().max(300),
-  weight: z.number().positive().max(700),
+  height: z
+    .number({ message: "Height must be a valid number" })
+    .positive("Height must be greater than 0")
+    .max(300, "Height must be at most 300 cm"),
+  weight: z
+    .number({ message: "Weight must be a valid number" })
+    .positive("Weight must be greater than 0")
+    .max(700, "Weight must be at most 700 kg"),
 });
 export type AnthropometricData = z.infer<typeof anthropometricDataSchema>;
 
@@ -70,13 +76,22 @@ export const labMarkerSchema = z.enum([
 export type LabMarker = z.infer<typeof labMarkerSchema>;
 
 export const biochemicalDataSchema = z.object({
-  testDate: z.string().date(),
+  testDate: z
+    .string({ message: "Test date is required" })
+    .date("Please enter a valid test date (YYYY-MM-DD)"),
   values: z
-    .array(z.object({ marker: labMarkerSchema, value: z.number() }))
+    .array(
+      z.object({
+        marker: labMarkerSchema,
+        value: z
+          .number({ message: "Value must be a number" })
+          .nonnegative("Value cannot be negative"),
+      }),
+    )
     .min(1, "Record at least one lab value")
     // One row per marker, so a result can't be recorded twice with different values.
     .refine((rows) => new Set(rows.map((r) => r.marker)).size === rows.length, {
-      message: "Each lab marker can only appear once",
+      message: "Each lab marker can only appear once per panel",
     }),
   notes: note,
 });
@@ -93,11 +108,31 @@ export const clinicalPhysicalDataSchema = z.object({
   oralHealth: note,
   vitalSigns: z
     .object({
-      systolic: z.number().positive().max(300).optional(),
-      diastolic: z.number().positive().max(200).optional(),
-      pulse: z.number().positive().max(300).optional(),
-      temperature: z.number().positive().max(50).optional(),
-      respiratoryRate: z.number().positive().max(100).optional(),
+      systolic: z
+        .number({ message: "Systolic BP must be a number" })
+        .positive("Must be greater than 0")
+        .max(300, "Max 300 mmHg")
+        .optional(),
+      diastolic: z
+        .number({ message: "Diastolic BP must be a number" })
+        .positive("Must be greater than 0")
+        .max(200, "Max 200 mmHg")
+        .optional(),
+      pulse: z
+        .number({ message: "Pulse must be a number" })
+        .positive("Must be greater than 0")
+        .max(300, "Max 300 bpm")
+        .optional(),
+      temperature: z
+        .number({ message: "Temperature must be a number" })
+        .positive("Must be greater than 0")
+        .max(50, "Max 50 °C")
+        .optional(),
+      respiratoryRate: z
+        .number({ message: "Respiratory rate must be a number" })
+        .positive("Must be greater than 0")
+        .max(100, "Max 100 breaths/min")
+        .optional(),
     })
     .optional(),
 });
@@ -133,7 +168,9 @@ export type EnvironmentalData = z.infer<typeof environmentalDataSchema>;
 // Create / query
 // ---------------------------------------------------------------------------
 
-const withPatient = { patientId: z.string().min(1) };
+const withPatient = {
+  patientId: z.string({ message: "Patient ID is required" }).min(1, "Patient ID is required"),
+};
 
 /**
  * One assessment row per domain, so a dietitian can save each stage of the
@@ -150,7 +187,7 @@ export const assessmentCreateSchema = z.discriminatedUnion("domain", [
 export type AssessmentCreateInput = z.infer<typeof assessmentCreateSchema>;
 
 export const assessmentsQuerySchema = z.object({
-  patientId: z.string().min(1),
+  patientId: z.string({ message: "Patient ID is required" }).min(1, "Patient ID is required"),
   /** Omit to get every domain, newest first. */
   domain: assessmentDomainSchema.optional(),
 });

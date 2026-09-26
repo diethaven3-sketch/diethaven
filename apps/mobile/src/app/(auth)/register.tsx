@@ -2,7 +2,7 @@ import { useState } from "react";
 import { router } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
 import { Pressable, Text } from "react-native";
-import { patientRegisterSchema } from "@repo/types";
+import { patientRegisterSchema, validateWithSchema } from "@repo/types";
 import { colors } from "@repo/ui-tokens";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
@@ -31,28 +31,43 @@ export default function Register() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const update = (key: keyof typeof initialForm) => (value: string) => setForm((f) => ({ ...f, [key]: value }));
+  const clearFieldError = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
+
+  const update = (key: keyof typeof initialForm) => (value: string | "MALE" | "FEMALE" | "OTHER" | null) => {
+    setForm((f) => ({ ...f, [key]: value }));
+    clearFieldError(key);
+  };
 
   const onSubmit = async () => {
     setFormError(null);
 
     if (!consentAccepted) {
-      setFieldErrors({ consent: "You must accept the consent statement to continue." });
+      setFieldErrors((prev) => ({ ...prev, consent: "You must accept the consent statement to continue." }));
+      setFormError("You must accept the consent statement to continue.");
       return;
     }
 
-    const parsed = patientRegisterSchema.safeParse({
+    const payload = {
       ...form,
-      phone: form.phone || undefined,
-      contact: form.contact || undefined,
+      name: form.name.trim(),
+      email: form.email.trim(),
+      phone: form.phone.trim() || undefined,
+      contact: form.contact.trim() || undefined,
       consentAccepted: true,
-    });
-    if (!parsed.success) {
-      const errors: Record<string, string> = {};
-      for (const issue of parsed.error.issues) {
-        errors[String(issue.path[0])] = issue.message;
-      }
-      setFieldErrors(errors);
+    };
+
+    const validation = validateWithSchema(patientRegisterSchema, payload);
+    if (!validation.success) {
+      setFieldErrors(validation.errors);
+      setFormError(validation.firstError);
       return;
     }
     setFieldErrors({});
@@ -61,12 +76,19 @@ export default function Register() {
     try {
       const { accessToken } = await apiFetch<{ accessToken: string }>("/auth/patient/register", {
         method: "POST",
-        body: parsed.data,
+        body: validation.data,
       });
       await login(accessToken);
       router.replace("/(app)/(tabs)/home");
     } catch (err) {
-      setFormError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
+      if (err instanceof ApiError) {
+        setFormError(err.message);
+        if (Object.keys(err.fieldErrors).length > 0) {
+          setFieldErrors((prev) => ({ ...prev, ...err.fieldErrors }));
+        }
+      } else {
+        setFormError("Something went wrong. Please try again.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -85,11 +107,17 @@ export default function Register() {
       </Pressable>
 
       <Text className="font-heading-bold text-2xl text-heading">Create your account</Text>
-      <Text className="font-body text-sm text-muted">Tell us a bit about yourself to get started</Text>
+      <Text className="-mt-1 font-body text-sm text-body">Sign up as a patient to start tracking your nutrition.</Text>
 
       {formError ? <Banner tone="danger">{formError}</Banner> : null}
 
-      <TextField label="Full name" value={form.name} onChangeText={update("name")} error={fieldErrors.name} autoCapitalize="words" />
+      <TextField
+        label="Full name"
+        value={form.name}
+        onChangeText={update("name")}
+        error={fieldErrors.name}
+        autoCapitalize="words"
+      />
       <TextField
         label="Email"
         value={form.email}
@@ -100,37 +128,53 @@ export default function Register() {
         autoCorrect={false}
       />
       <TextField
-        label="Password"
+        label="Password (min. 8 characters)"
         value={form.password}
         onChangeText={update("password")}
         error={fieldErrors.password}
         secureTextEntry
       />
-      <TextField label="Phone (optional)" value={form.phone} onChangeText={update("phone")} keyboardType="phone-pad" />
       <TextField
-        label="Date of birth"
-        placeholder="YYYY-MM-DD"
+        label="Phone (optional)"
+        value={form.phone}
+        onChangeText={update("phone")}
+        error={fieldErrors.phone}
+        keyboardType="phone-pad"
+      />
+      <TextField
+        label="Date of birth (YYYY-MM-DD)"
         value={form.dateOfBirth}
         onChangeText={update("dateOfBirth")}
         error={fieldErrors.dateOfBirth}
-        keyboardType="numbers-and-punctuation"
+        placeholder="YYYY-MM-DD"
       />
+
       <SegmentedControl
-        label="Sex"
-        value={form.sex}
-        onChange={(value) => setForm((f) => ({ ...f, sex: value }))}
+        label="Sex assigned at birth"
         options={[
           { value: "MALE", label: "Male" },
           { value: "FEMALE", label: "Female" },
           { value: "OTHER", label: "Other" },
         ]}
+        value={form.sex}
+        onChange={update("sex")}
+        error={fieldErrors.sex}
       />
-      <TextField label="Contact address (optional)" value={form.contact} onChangeText={update("contact")} />
+
+      <TextField
+        label="Emergency contact (optional)"
+        value={form.contact}
+        onChangeText={update("contact")}
+        error={fieldErrors.contact}
+      />
 
       <ConsentBox
-        label="I consent to DietHaven collecting and processing my health data in line with the NDPA 2023 for the purpose of my nutrition care."
+        label="I consent to DietHaven collecting and processing my health data in line with the NDPA 2023."
         checked={consentAccepted}
-        onChange={setConsentAccepted}
+        onChange={(checked) => {
+          setConsentAccepted(checked);
+          clearFieldError("consent");
+        }}
         error={fieldErrors.consent}
       />
 

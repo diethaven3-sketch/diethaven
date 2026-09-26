@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { assessmentCreateSchema, type AssessmentDomain } from "@repo/types";
+import { assessmentCreateSchema, validateWithSchema, type AssessmentDomain } from "@repo/types";
 import { apiFetch, ApiError } from "../../lib/api-client";
 import { useAuth } from "../../lib/auth-context";
 
@@ -26,34 +26,63 @@ export function pruneEmpty<T extends Record<string, unknown>>(values: T): Partia
  */
 export function useDomainSave(patientId: string, domain: AssessmentDomain, onSaved: () => void) {
   const { token } = useAuth();
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  const clearFieldError = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
 
   const save = async (data: unknown) => {
     setError(null);
     setSuccess(false);
 
-    const parsed = assessmentCreateSchema.safeParse({ patientId, domain, data });
-    if (!parsed.success) {
-      const issue = parsed.error.issues[0];
-      setError(issue ? `${issue.path.slice(2).join(".") || "Form"}: ${issue.message}` : "Check the form and retry.");
+    const validation = validateWithSchema(assessmentCreateSchema, { patientId, domain, data });
+    if (!validation.success) {
+      const cleanErrors: Record<string, string> = {};
+      for (const [key, msg] of Object.entries(validation.errors)) {
+        const fieldName = key.startsWith("data.") ? key.replace("data.", "") : key;
+        cleanErrors[fieldName] = msg;
+      }
+      setFieldErrors(cleanErrors);
+      setError(validation.firstError);
       return false;
     }
+    setFieldErrors({});
 
     setSubmitting(true);
     try {
-      await apiFetch("/assessments", { method: "POST", token, body: parsed.data });
+      await apiFetch("/assessments", { method: "POST", token, body: validation.data });
       setSuccess(true);
       onSaved();
       return true;
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to save assessment.");
+      if (err instanceof ApiError) {
+        setError(err.message);
+        if (Object.keys(err.fieldErrors).length > 0) {
+          const cleanErrors: Record<string, string> = {};
+          for (const [key, msg] of Object.entries(err.fieldErrors)) {
+            const fieldName = key.startsWith("data.") ? key.replace("data.", "") : key;
+            cleanErrors[fieldName] = msg;
+          }
+          setFieldErrors((prev) => ({ ...prev, ...cleanErrors }));
+        }
+      } else {
+        setError("Failed to save assessment.");
+      }
       return false;
     } finally {
       setSubmitting(false);
     }
   };
 
-  return { save, error, success, submitting };
+  return { save, error, success, submitting, fieldErrors, clearFieldError, setFieldErrors };
 }

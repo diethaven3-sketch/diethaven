@@ -3,7 +3,7 @@ import { router } from "expo-router";
 import { ArrowLeft, Check } from "lucide-react-native";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { changePasswordSchema } from "@repo/types";
+import { changePasswordSchema, validateWithSchema } from "@repo/types";
 import { colors } from "@repo/ui-tokens";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
@@ -35,31 +35,46 @@ export default function ChangePassword() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const clearFieldError = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
+
   const onSubmit = async () => {
     setFormError(null);
 
     if (newPassword !== confirmPassword) {
       setFieldErrors({ confirmPassword: "The two passwords don't match." });
+      setFormError("The two passwords don't match.");
       return;
     }
 
-    const parsed = changePasswordSchema.safeParse({ currentPassword, newPassword });
-    if (!parsed.success) {
-      const errors: Record<string, string> = {};
-      for (const issue of parsed.error.issues) {
-        errors[String(issue.path[0])] = issue.message;
-      }
-      setFieldErrors(errors);
+    const validation = validateWithSchema(changePasswordSchema, { currentPassword, newPassword });
+    if (!validation.success) {
+      setFieldErrors(validation.errors);
+      setFormError(validation.firstError);
       return;
     }
     setFieldErrors({});
 
     setSubmitting(true);
     try {
-      await apiFetch("/auth/change-password", { method: "POST", token, body: parsed.data });
+      await apiFetch("/auth/change-password", { method: "POST", token, body: validation.data });
       router.back();
     } catch (err) {
-      setFormError(err instanceof ApiError ? err.message : "Couldn't change your password. Please try again.");
+      if (err instanceof ApiError) {
+        setFormError(err.message);
+        if (Object.keys(err.fieldErrors).length > 0) {
+          setFieldErrors((prev) => ({ ...prev, ...err.fieldErrors }));
+        }
+      } else {
+        setFormError("Couldn't change your password. Please try again.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -87,30 +102,41 @@ export default function ChangePassword() {
         <TextField
           label="Current password"
           value={currentPassword}
-          onChangeText={setCurrentPassword}
+          onChangeText={(text) => {
+            setCurrentPassword(text);
+            clearFieldError("currentPassword");
+          }}
           error={fieldErrors.currentPassword}
           secureTextEntry
         />
         <TextField
           label="New password"
           value={newPassword}
-          onChangeText={setNewPassword}
+          onChangeText={(text) => {
+            setNewPassword(text);
+            clearFieldError("newPassword");
+          }}
           error={fieldErrors.newPassword}
           secureTextEntry
         />
+
+        <View className="gap-2 rounded-lg bg-surface-alt p-3.5">
+          <Text className="font-body-medium text-xs text-heading">Password requirements</Text>
+          {REQUIREMENTS.map((r) => (
+            <RequirementRow key={r.label} label={r.label} met={r.test(newPassword)} />
+          ))}
+        </View>
+
         <TextField
           label="Confirm new password"
           value={confirmPassword}
-          onChangeText={setConfirmPassword}
+          onChangeText={(text) => {
+            setConfirmPassword(text);
+            clearFieldError("confirmPassword");
+          }}
           error={fieldErrors.confirmPassword}
           secureTextEntry
         />
-
-        <View className="gap-2">
-          {REQUIREMENTS.map((requirement) => (
-            <RequirementRow key={requirement.label} label={requirement.label} met={requirement.test(newPassword)} />
-          ))}
-        </View>
 
         <Button onPress={onSubmit} loading={submitting}>
           Update password

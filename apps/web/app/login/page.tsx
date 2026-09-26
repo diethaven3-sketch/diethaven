@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { loginSchema } from "@repo/types";
+import { loginSchema, validateWithSchema } from "@repo/types";
 import { apiFetch, ApiError } from "../../lib/api-client";
 import { useAuth } from "../../lib/auth-context";
 import { Button } from "../../components/ui/button";
@@ -20,17 +20,23 @@ export default function LoginPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const clearFieldError = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
+
   const validate = () => {
-    const result = loginSchema.safeParse({ email, password });
+    const result = validateWithSchema(loginSchema, { email, password });
     if (result.success) {
       setFieldErrors({});
       return true;
     }
-    const errors: Record<string, string> = {};
-    for (const issue of result.error.issues) {
-      errors[String(issue.path[0])] = issue.message;
-    }
-    setFieldErrors(errors);
+    setFieldErrors(result.errors);
     return false;
   };
 
@@ -48,7 +54,14 @@ export default function LoginPage() {
       login(accessToken);
       router.replace("/");
     } catch (error) {
-      setFormError(error instanceof ApiError ? error.message : "Something went wrong. Please try again.");
+      if (error instanceof ApiError) {
+        setFormError(error.message);
+        if (Object.keys(error.fieldErrors).length > 0) {
+          setFieldErrors((prev) => ({ ...prev, ...error.fieldErrors }));
+        }
+      } else {
+        setFormError("Something went wrong. Please try again.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -69,7 +82,10 @@ export default function LoginPage() {
             name="email"
             autoComplete="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              clearFieldError("email");
+            }}
             onBlur={validate}
             error={fieldErrors.email}
             required
@@ -80,7 +96,10 @@ export default function LoginPage() {
             name="password"
             autoComplete="current-password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              clearFieldError("password");
+            }}
             onBlur={validate}
             error={fieldErrors.password}
             required

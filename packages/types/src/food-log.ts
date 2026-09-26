@@ -9,10 +9,14 @@ import { mealTypeSchema, type Meal, type MealType } from "./intervention";
  */
 export const foodLogItemSchema = z.object({
   foodExchangeItemId: z.string().min(1).optional(),
-  foodName: z.string().trim().min(1).max(200),
+  foodName: z
+    .string({ message: "Food name is required" })
+    .trim()
+    .min(1, "Food name is required")
+    .max(200, "Food name is too long"),
   exchangeGroup: exchangeGroupSchema.optional(),
   portionSize: z.string().max(100).optional(),
-  exchanges: z.number().positive().max(50).optional(),
+  exchanges: z.number({ message: "Exchanges must be a number" }).positive("Exchanges must be greater than 0").max(50).optional(),
 });
 export type FoodLogItem = z.infer<typeof foodLogItemSchema>;
 

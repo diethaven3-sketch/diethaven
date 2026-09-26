@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { router } from "expo-router";
 import { Text } from "react-native";
-import { forgotPasswordSchema } from "@repo/types";
+import { forgotPasswordSchema, validateWithSchema } from "@repo/types";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { Screen } from "@/components/screen";
 import { Button } from "@/components/ui/button";
@@ -10,28 +10,48 @@ import { Banner } from "@/components/ui/banner";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  const clearFieldError = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
+
   const onSubmit = async () => {
     setError(null);
-    const parsed = forgotPasswordSchema.safeParse({ email });
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "Enter a valid email.");
+    const validation = validateWithSchema(forgotPasswordSchema, { email: email.trim() });
+    if (!validation.success) {
+      setFieldErrors(validation.errors);
+      setError(validation.firstError);
       return;
     }
+    setFieldErrors({});
 
     setSubmitting(true);
     try {
       const res = await apiFetch<{ message: string; devResetCode?: string }>("/auth/forgot-password", {
         method: "POST",
-        body: parsed.data,
+        body: validation.data,
       });
       setSent(true);
-      router.push({ pathname: "/(auth)/reset-password", params: { email, devResetCode: res.devResetCode } });
+      router.push({ pathname: "/(auth)/reset-password", params: { email: email.trim(), devResetCode: res.devResetCode } });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
+      if (err instanceof ApiError) {
+        setError(err.message);
+        if (Object.keys(err.fieldErrors).length > 0) {
+          setFieldErrors((prev) => ({ ...prev, ...err.fieldErrors }));
+        }
+      } else {
+        setError("Something went wrong. Please try again.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -50,7 +70,12 @@ export default function ForgotPassword() {
       <TextField
         label="Email"
         value={email}
-        onChangeText={setEmail}
+        onChangeText={(text) => {
+          setEmail(text);
+          clearFieldError("email");
+          if (error) setError(null);
+        }}
+        error={fieldErrors.email}
         keyboardType="email-address"
         autoCapitalize="none"
         autoCorrect={false}

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
 import { ArrowLeft, CircleAlert } from "lucide-react-native";
 import { Pressable, Text, TextInput, View } from "react-native";
-import { otpRequestSchema, otpVerifySchema } from "@repo/types";
+import { otpRequestSchema, otpVerifySchema, validateWithSchema } from "@repo/types";
 import { colors } from "@repo/ui-tokens";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
@@ -34,6 +34,7 @@ export default function OtpVerify() {
   const code = digits.join("");
 
   const setDigit = (index: number, value: string) => {
+    setError(null);
     const char = value.slice(-1).replace(/[^0-9]/g, "");
     setDigits((current) => {
       const next = [...current];
@@ -53,9 +54,9 @@ export default function OtpVerify() {
 
   const onSubmit = async () => {
     setError(null);
-    const parsed = otpVerifySchema.safeParse({ email, code });
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "Enter the 6-digit code.");
+    const validation = validateWithSchema(otpVerifySchema, { email: email.trim(), code });
+    if (!validation.success) {
+      setError(validation.firstError);
       return;
     }
 
@@ -63,7 +64,7 @@ export default function OtpVerify() {
     try {
       const { accessToken } = await apiFetch<{ accessToken: string }>("/auth/otp/verify", {
         method: "POST",
-        body: parsed.data,
+        body: validation.data,
       });
       await login(accessToken);
       router.replace("/(app)/(tabs)/home");
@@ -75,11 +76,11 @@ export default function OtpVerify() {
   };
 
   const onResend = async () => {
-    const parsed = otpRequestSchema.safeParse({ email });
-    if (!parsed.success) return;
+    const validation = validateWithSchema(otpRequestSchema, { email: email.trim() });
+    if (!validation.success) return;
     setResending(true);
     try {
-      await apiFetch("/auth/otp/request", { method: "POST", body: parsed.data });
+      await apiFetch("/auth/otp/request", { method: "POST", body: validation.data });
       setResendIn(RESEND_SECONDS);
       setDigits(Array(6).fill(""));
       setError(null);

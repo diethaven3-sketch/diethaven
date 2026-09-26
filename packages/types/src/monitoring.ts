@@ -2,7 +2,9 @@ import { z } from "zod";
 import { LAB_REFERENCES, flagLabValue, type LabFlag } from "./lab-ranges";
 import type { LabMarker } from "./assessments";
 
-export const outcomeStatusSchema = z.enum(["RESOLVED", "IMPROVED", "UNCHANGED", "WORSENED"]);
+export const outcomeStatusSchema = z.enum(["RESOLVED", "IMPROVED", "UNCHANGED", "WORSENED"], {
+  message: "Please select a visit outcome",
+});
 export type OutcomeStatus = z.infer<typeof outcomeStatusSchema>;
 
 export const OUTCOME_STATUS_LABELS: Record<OutcomeStatus, string> = {
@@ -14,11 +16,11 @@ export const OUTCOME_STATUS_LABELS: Record<OutcomeStatus, string> = {
 
 export const followUpCreateSchema = z
   .object({
-    patientId: z.string().min(1),
+    patientId: z.string({ message: "Patient ID is required" }).min(1, "Patient ID is required"),
     diagnosisId: z.string().min(1).optional(),
     interventionId: z.string().min(1).optional(),
     outcome: outcomeStatusSchema,
-    notes: z.string().trim().min(1, "Record what happened at this visit").max(5000),
+    notes: z.string({ message: "Visit notes are required" }).trim().min(1, "Record what happened at this visit").max(5000),
   })
   // A follow-up that reviews nothing has no anchor in the care history, which
   // is the whole point of the record.
@@ -31,13 +33,13 @@ export type FollowUpCreateInput = z.infer<typeof followUpCreateSchema>;
 export const followUpUpdateSchema = z
   .object({
     outcome: outcomeStatusSchema.optional(),
-    notes: z.string().trim().min(1).max(5000).optional(),
+    notes: z.string().trim().min(1, "Visit notes cannot be empty").max(5000).optional(),
   })
   .refine((value) => Object.keys(value).length > 0, { message: "Nothing to update" });
 export type FollowUpUpdateInput = z.infer<typeof followUpUpdateSchema>;
 
 export const followUpsQuerySchema = z.object({
-  patientId: z.string().min(1),
+  patientId: z.string({ message: "Patient ID is required" }).min(1, "Patient ID is required"),
 });
 export type FollowUpsQuery = z.infer<typeof followUpsQuerySchema>;
 
@@ -66,113 +68,85 @@ export interface LabTrend {
   marker: LabMarker;
   label: string;
   unit: string;
-  referenceLow: number;
-  referenceHigh: number;
-  /** Oldest first, so a chart or table reads left to right through time. */
+  low: number;
+  high: number;
   points: LabPoint[];
-  latest: LabPoint;
-  /** Change from the first recorded value to the latest, or null with one point. */
-  change: number | null;
+  latest: LabPoint | null;
 }
 
-interface AssessmentLike {
-  date: string;
-  domain: string;
-  domainData: Record<string, unknown>;
-}
-
-interface StoredLabValue {
-  marker: LabMarker;
-  value: number;
-  flag?: LabFlag;
-}
-
-function round1(n: number) {
-  return Math.round(n * 10) / 10;
-}
-
-/** Anthropometric series, oldest first. */
-export function anthropometricTrend(assessments: AssessmentLike[]): AnthropometricPoint[] {
+/**
+ * Extracts and sorts anthropometric rows into a dated series. Returns an
+ * empty list when no anthropometric rows exist.
+ */
+export function anthropometricTrend(
+  assessments: Array<{ domain: string; date: string; domainData: unknown }>,
+): AnthropometricPoint[] {
   return assessments
     .filter((a) => a.domain === "ANTHROPOMETRIC")
-    .map((a) => ({
-      date: a.date,
-      height: Number(a.domainData.height),
-      weight: Number(a.domainData.weight),
-      bmi: Number(a.domainData.bmi),
-    }))
-    .filter((point) => Number.isFinite(point.weight) && Number.isFinite(point.bmi))
+    .map((a) => {
+      const data = a.domainData as { height?: number; weight?: number; bmi?: number } | null;
+      if (!data?.height || !data?.weight || !data?.bmi) return null;
+      return { date: a.date, height: data.height, weight: data.weight, bmi: data.bmi };
+    })
+    .filter((p): p is AnthropometricPoint => p !== null)
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 }
 
 /**
- * One trend per lab marker the patient has results for, each compared against
- * its reference range (guideline §4.2.4: "trend view of key labs over multiple
- * visits, compared against target ranges").
+ * First-to-latest comparison for weight and BMI. Returns null when fewer
+ * than two data points exist (no trend to summarise).
  */
-export function labTrends(assessments: AssessmentLike[]): LabTrend[] {
+export function weightSummary(points: AnthropometricPoint[]) {
+  if (points.length < 2) return null;
+  const first = points[0]!;
+  const latest = points[points.length - 1]!;
+  const weightChange = Math.round((latest.weight - first.weight) * 10) / 10;
+  const bmiChange = Math.round((latest.bmi - first.bmi) * 10) / 10;
+  return { first, latest, weightChange, bmiChange };
+}
+
+/**
+ * Groups laboratory assessment results by marker into a sorted time series
+ * per marker, with each point flagged against its reference range.
+ */
+export function labTrends(
+  assessments: Array<{ domain: string; date: string; domainData: unknown }>,
+): LabTrend[] {
   const byMarker = new Map<LabMarker, LabPoint[]>();
 
-  for (const assessment of assessments) {
-    if (assessment.domain !== "BIOCHEMICAL") continue;
-    const values = (assessment.domainData.values as StoredLabValue[] | undefined) ?? [];
-    // The lab's own test date is the clinically meaningful one; fall back to
-    // when the row was recorded if it is missing.
-    const date = (assessment.domainData.testDate as string | undefined) ?? assessment.date;
-
-    for (const value of values) {
-      if (!LAB_REFERENCES[value.marker] || !Number.isFinite(value.value)) continue;
-      const points = byMarker.get(value.marker) ?? [];
-      points.push({ date, value: value.value, flag: value.flag ?? flagLabValue(value.marker, value.value) });
-      byMarker.set(value.marker, points);
+  for (const a of assessments) {
+    if (a.domain !== "BIOCHEMICAL") continue;
+    const data = a.domainData as { values?: Array<{ marker: LabMarker; value: number }> } | null;
+    if (!data?.values) continue;
+    for (const entry of data.values) {
+      if (typeof entry.value !== "number" || Number.isNaN(entry.value)) continue;
+      const ref = LAB_REFERENCES[entry.marker];
+      if (!ref) continue;
+      const point: LabPoint = {
+        date: a.date,
+        value: entry.value,
+        flag: flagLabValue(entry.marker, entry.value),
+      };
+      const list = byMarker.get(entry.marker) ?? [];
+      list.push(point);
+      byMarker.set(entry.marker, list);
     }
   }
 
   const trends: LabTrend[] = [];
-  for (const [marker, points] of byMarker) {
+  for (const [marker, points] of byMarker.entries()) {
+    const ref = LAB_REFERENCES[marker];
     points.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    const reference = LAB_REFERENCES[marker];
-    const first = points[0];
-    const latest = points[points.length - 1];
-    if (!first || !latest) continue;
-
     trends.push({
       marker,
-      label: reference.label,
-      unit: reference.unit,
-      referenceLow: reference.low,
-      referenceHigh: reference.high,
+      label: ref.label,
+      unit: ref.unit,
+      low: ref.low,
+      high: ref.high,
       points,
-      latest,
-      change: points.length > 1 ? round1(latest.value - first.value) : null,
+      latest: points[points.length - 1] ?? null,
     });
   }
 
-  // Markers currently outside their range first — those are what a follow-up
-  // visit needs to look at.
-  return trends.sort((a, b) => {
-    const aAbnormal = a.latest.flag !== "NORMAL" ? 0 : 1;
-    const bAbnormal = b.latest.flag !== "NORMAL" ? 0 : 1;
-    return aAbnormal - bAbnormal || a.label.localeCompare(b.label);
-  });
-}
-
-export interface WeightSummary {
-  first: AnthropometricPoint;
-  latest: AnthropometricPoint;
-  weightChange: number;
-  bmiChange: number;
-}
-
-/** First-to-latest change, for the headline of a progress report. */
-export function weightSummary(points: AnthropometricPoint[]): WeightSummary | null {
-  const first = points[0];
-  const latest = points[points.length - 1];
-  if (!first || !latest || points.length < 2) return null;
-  return {
-    first,
-    latest,
-    weightChange: round1(latest.weight - first.weight),
-    bmiChange: round1(latest.bmi - first.bmi),
-  };
+  return trends.sort((a, b) => a.label.localeCompare(b.label));
 }
