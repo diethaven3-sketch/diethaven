@@ -54,17 +54,15 @@ export function AdminShell({ title, children }: { title: string; children: React
     <div className="flex min-h-screen bg-surface">
       {/* Desktop sidebar */}
       <aside className="hidden w-64 shrink-0 flex-col bg-primary text-white md:flex">
-        <div className="flex items-center gap-3 px-6 py-6 border-b border-white/10">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 text-white shadow-xs">
-            <ShieldCheck size={22} className="text-secondary" />
-          </div>
+        <div className="flex items-center gap-3 px-6 py-5 border-b border-white/10">
+          <ShieldCheck size={20} className="text-secondary shrink-0" />
           <div>
             <p className="text-base font-bold leading-tight" style={{ fontFamily: "var(--font-heading)" }}>
               DietHaven
             </p>
-            <span className="inline-block rounded bg-white/20 px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wider text-white">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-white/70">
               Admin Console
-            </span>
+            </p>
           </div>
         </div>
 
