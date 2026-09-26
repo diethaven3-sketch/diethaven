@@ -53,7 +53,8 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "client": "eas build --platform android --profile development"
   },
   "private": true
 }

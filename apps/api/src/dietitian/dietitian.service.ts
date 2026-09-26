@@ -5,6 +5,7 @@ import type { InviteRequestInput } from "@repo/types";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { EmailService } from "../email/email.service";
+import { primaryWebOrigin } from "../web-origin";
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -93,7 +94,7 @@ export class DietitianService {
       select: { name: true },
     });
 
-    const webOrigin = this.config.get<string>("WEB_ORIGIN") || "http://localhost:3000";
+    const webOrigin = primaryWebOrigin(this.config.get<string>("WEB_ORIGIN"));
     const inviteUrl = `${webOrigin}/invites/${token}`;
 
     this.logger.log(`Invite link for ${dto.email}: ${inviteUrl}`);
