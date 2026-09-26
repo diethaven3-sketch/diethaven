@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { ScrollText, ChevronLeft, ChevronRight, ShieldCheck, FilterX } from "lucide-react";
 import { apiFetch, ApiError } from "../../../lib/api-client";
 import { useAuth } from "../../../lib/auth-context";
 import { RequireRole } from "../../../components/require-role";
@@ -9,7 +10,9 @@ import { Badge } from "../../../components/ui/badge";
 import { Button } from "../../../components/ui/button";
 import { Banner } from "../../../components/ui/banner";
 import { Card } from "../../../components/ui/card";
-import { SelectField } from "../../../components/ui/select";
+import { CustomSelect } from "../../../components/ui/custom-select";
+import { EmptyState } from "../../../components/ui/empty-state";
+import { TableSkeleton } from "../../../components/ui/skeleton";
 import { Table, Thead, Tbody, Th, Td } from "../../../components/ui/table";
 
 type AuditAction = "CREATE" | "UPDATE" | "VIEW";
@@ -36,19 +39,34 @@ const actionTone: Record<AuditAction, "success" | "info" | "neutral"> = {
   VIEW: "neutral",
 };
 
+const entityTypeOptions = [
+  { value: "ALL", label: "All Entity Types" },
+  { value: "PatientProfile", label: "Patient Profile" },
+  { value: "Assessment", label: "Assessment" },
+  { value: "Diagnosis", label: "Diagnosis" },
+  { value: "Intervention", label: "Intervention" },
+];
+
+const actionOptions = [
+  { value: "ALL", label: "All Actions" },
+  { value: "CREATE", label: "Create" },
+  { value: "UPDATE", label: "Update" },
+  { value: "VIEW", label: "View" },
+];
+
 function AuditLogPage() {
   const { token } = useAuth();
   const [data, setData] = useState<AuditLogResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [entityType, setEntityType] = useState("");
-  const [action, setAction] = useState<AuditAction | "">("");
+  const [entityType, setEntityType] = useState("ALL");
+  const [action, setAction] = useState("ALL");
   const [page, setPage] = useState(1);
 
   const load = useCallback(async () => {
     try {
       const params = new URLSearchParams({ page: String(page) });
-      if (entityType) params.set("entityType", entityType);
-      if (action) params.set("action", action);
+      if (entityType !== "ALL") params.set("entityType", entityType);
+      if (action !== "ALL") params.set("action", action);
       const res = await apiFetch<AuditLogResponse>(`/admin/audit-logs?${params.toString()}`, { token });
       setData(res);
     } catch (err) {
@@ -64,39 +82,43 @@ function AuditLogPage() {
 
   return (
     <AdminShell title="Audit log">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-xl font-bold text-heading">Audit log</h2>
-          <p className="mt-1 text-sm text-body">Every create, edit, and view of patient records and assessments.</p>
+          <div className="flex items-center gap-2">
+            <h2 className="text-2xl font-bold text-heading" style={{ fontFamily: "var(--font-heading)" }}>
+              Audit Log
+            </h2>
+            <span className="inline-flex items-center gap-1 rounded-full bg-surface-alt px-2.5 py-0.5 text-xs font-semibold text-primary">
+              <ShieldCheck size={13} />
+              NDPA 2023 Compliant
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-body/75">
+            Immutable log recording every create, edit, and access event on patient clinical data.
+          </p>
         </div>
-        <div className="flex gap-3">
-          <SelectField
-            label="Entity type"
-            name="entityType"
-            value={entityType}
-            onChange={(e) => {
-              setPage(1);
-              setEntityType(e.target.value);
-            }}
-          >
-            <option value="">All</option>
-            <option value="PatientProfile">PatientProfile</option>
-            <option value="Assessment">Assessment</option>
-          </SelectField>
-          <SelectField
-            label="Action"
-            name="action"
-            value={action}
-            onChange={(e) => {
-              setPage(1);
-              setAction(e.target.value as AuditAction | "");
-            }}
-          >
-            <option value="">All</option>
-            <option value="CREATE">Create</option>
-            <option value="UPDATE">Update</option>
-            <option value="VIEW">View</option>
-          </SelectField>
+
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <div className="w-full sm:w-48">
+            <CustomSelect
+              value={entityType}
+              onValueChange={(val) => {
+                setPage(1);
+                setEntityType(val);
+              }}
+              options={entityTypeOptions}
+            />
+          </div>
+          <div className="w-full sm:w-40">
+            <CustomSelect
+              value={action}
+              onValueChange={(val) => {
+                setPage(1);
+                setAction(val);
+              }}
+              options={actionOptions}
+            />
+          </div>
         </div>
       </div>
 
@@ -106,34 +128,74 @@ function AuditLogPage() {
         </Banner>
       ) : null}
 
-      <Card className="mt-6 p-0">
+      <div className="mt-4 flex items-center justify-between text-xs text-body/70">
+        {data !== null && (
+          <p>
+            Showing <span className="font-semibold text-heading">{data.entries.length}</span> of{" "}
+            <span className="font-semibold text-heading">{data.total}</span> total entries
+          </p>
+        )}
+      </div>
+
+      <Card className="mt-2 p-0 overflow-hidden shadow-xs border-gray-200">
         {data === null ? (
-          <p className="p-6 text-sm text-body">Loading…</p>
+          <TableSkeleton columns={5} rows={8} />
         ) : data.entries.length === 0 ? (
-          <p className="p-6 text-sm text-body">No matching audit entries.</p>
+          <EmptyState
+            icon={ScrollText}
+            title="No matching audit entries"
+            description={
+              entityType !== "ALL" || action !== "ALL"
+                ? "No audit records match the selected filters. Try changing or clearing your criteria."
+                : "No audit records logged in the system yet."
+            }
+            action={
+              entityType !== "ALL" || action !== "ALL" ? (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setEntityType("ALL");
+                    setAction("ALL");
+                    setPage(1);
+                  }}
+                  className="text-xs flex items-center gap-1.5"
+                >
+                  <FilterX size={14} />
+                  Reset filters
+                </Button>
+              ) : undefined
+            }
+          />
         ) : (
           <Table>
             <Thead>
               <tr>
                 <Th>Timestamp</Th>
-                <Th>Actor</Th>
+                <Th>Actor & Role</Th>
                 <Th>Action</Th>
-                <Th>Entity type</Th>
+                <Th>Entity Type</Th>
                 <Th>Entity ID</Th>
               </tr>
             </Thead>
             <Tbody>
               {data.entries.map((entry) => (
-                <tr key={entry.id}>
-                  <Td>{new Date(entry.timestamp).toLocaleString()}</Td>
+                <tr key={entry.id} className="hover:bg-gray-50/70 transition-colors">
+                  <Td className="text-xs whitespace-nowrap">
+                    {new Date(entry.timestamp).toLocaleString()}
+                  </Td>
                   <Td>
-                    {entry.user.name} <span className="text-body/60">({entry.user.role})</span>
+                    <div className="flex flex-col">
+                      <span className="font-medium text-heading">{entry.user.name}</span>
+                      <span className="text-2xs text-body/60">
+                        {entry.user.email} • {entry.user.role}
+                      </span>
+                    </div>
                   </Td>
                   <Td>
                     <Badge tone={actionTone[entry.action]}>{entry.action}</Badge>
                   </Td>
-                  <Td>{entry.entityType}</Td>
-                  <Td className="font-mono text-xs">{entry.entityId}</Td>
+                  <Td className="font-medium text-sm text-heading">{entry.entityType}</Td>
+                  <Td className="font-mono text-xs text-body/70">{entry.entityId}</Td>
                 </tr>
               ))}
             </Tbody>
@@ -143,15 +205,28 @@ function AuditLogPage() {
 
       {data && data.total > data.pageSize ? (
         <div className="mt-4 flex items-center justify-between text-sm text-body">
-          <span>
-            Page {data.page} of {totalPages} ({data.total} entries)
+          <span className="text-xs text-body/70">
+            Page <span className="font-semibold text-heading">{data.page}</span> of{" "}
+            <span className="font-semibold text-heading">{totalPages}</span>
           </span>
-          <div className="flex gap-2">
-            <Button variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => p - 1)}
+              className="text-xs flex items-center gap-1 px-3 py-1.5"
+            >
+              <ChevronLeft size={14} />
               Previous
             </Button>
-            <Button variant="outline" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+            <Button
+              variant="outline"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => p + 1)}
+              className="text-xs flex items-center gap-1 px-3 py-1.5"
+            >
               Next
+              <ChevronRight size={14} />
             </Button>
           </div>
         </div>

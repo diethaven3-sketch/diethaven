@@ -185,7 +185,7 @@ export class AuthService {
   getProfile(userId: string) {
     return this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
-      select: { id: true, name: true, email: true, phone: true, role: true, createdAt: true },
+      select: { id: true, name: true, email: true, phone: true, avatarUrl: true, role: true, createdAt: true },
     });
   }
 
@@ -193,7 +193,7 @@ export class AuthService {
     return this.prisma.user.update({
       where: { id: userId },
       data: dto,
-      select: { id: true, name: true, email: true, phone: true, role: true, createdAt: true },
+      select: { id: true, name: true, email: true, phone: true, avatarUrl: true, role: true, createdAt: true },
     });
   }
 

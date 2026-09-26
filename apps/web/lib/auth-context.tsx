@@ -1,6 +1,15 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import { apiFetch } from "./api-client";
 
 export interface AuthUser {
   id: string;
@@ -8,12 +17,25 @@ export interface AuthUser {
   email: string;
 }
 
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  role: string;
+  avatarUrl?: string | null;
+  createdAt: string;
+}
+
 interface AuthContextValue {
   user: AuthUser | null;
+  profile: UserProfile | null;
   token: string | null;
   loading: boolean;
   login: (token: string) => void;
   logout: () => void;
+  refreshProfile: () => Promise<UserProfile | null>;
+  setProfile: React.Dispatch<React.SetStateAction<UserProfile | null>>;
 }
 
 const STORAGE_KEY = "diethaven_token";
@@ -36,7 +58,23 @@ function decodeToken(token: string): AuthUser | null {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const refreshProfile = useCallback(async (): Promise<UserProfile | null> => {
+    const currentToken = token ?? localStorage.getItem(STORAGE_KEY);
+    if (!currentToken) {
+      setProfile(null);
+      return null;
+    }
+    try {
+      const data = await apiFetch<UserProfile>("/auth/profile", { token: currentToken });
+      setProfile(data);
+      return data;
+    } catch {
+      return null;
+    }
+  }, [token]);
 
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -45,6 +83,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (decoded) {
         setToken(stored);
         setUser(decoded);
+        apiFetch<UserProfile>("/auth/profile", { token: stored })
+          .then(setProfile)
+          .catch(() => {});
       } else {
         localStorage.removeItem(STORAGE_KEY);
       }
@@ -58,15 +99,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_KEY, newToken);
     setToken(newToken);
     setUser(decoded);
+    apiFetch<UserProfile>("/auth/profile", { token: newToken })
+      .then(setProfile)
+      .catch(() => {});
   };
 
   const logout = () => {
     localStorage.removeItem(STORAGE_KEY);
     setToken(null);
     setUser(null);
+    setProfile(null);
   };
 
-  const value = useMemo(() => ({ user, token, loading, login, logout }), [user, token, loading]);
+  const value = useMemo(
+    () => ({
+      user,
+      profile,
+      token,
+      loading,
+      login,
+      logout,
+      refreshProfile,
+      setProfile,
+    }),
+    [user, profile, token, loading, refreshProfile],
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

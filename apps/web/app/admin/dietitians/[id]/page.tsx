@@ -2,15 +2,29 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  XCircle,
+  Ban,
+  Users,
+  Building2,
+  Award,
+  Phone,
+  Calendar,
+  Mail,
+} from "lucide-react";
 import { apiFetch, ApiError } from "../../../../lib/api-client";
 import { useAuth } from "../../../../lib/auth-context";
 import { RequireRole } from "../../../../components/require-role";
 import { AdminShell } from "../../../../components/admin-shell";
+import { Avatar } from "../../../../components/ui/avatar";
 import { Badge } from "../../../../components/ui/badge";
 import { Button } from "../../../../components/ui/button";
 import { Banner } from "../../../../components/ui/banner";
 import { Card } from "../../../../components/ui/card";
+import { EmptyState } from "../../../../components/ui/empty-state";
+import { DetailCardSkeleton, TableSkeleton } from "../../../../components/ui/skeleton";
 import { Table, Thead, Tbody, Th, Td } from "../../../../components/ui/table";
 import { statusTone } from "../page";
 
@@ -20,7 +34,14 @@ interface DietitianDetail {
   specialty: string;
   facility: string;
   approvalStatus: "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED";
-  user: { id: string; name: string; email: string; phone: string | null; createdAt: string };
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    phone: string | null;
+    avatarUrl?: string | null;
+    createdAt: string;
+  };
   patients: { id: string; name: string; email: string; linkedAt: string }[];
 }
 
@@ -61,7 +82,7 @@ function DietitianDetailView({ id }: { id: string }) {
     <AdminShell title="Dietitian detail">
       <button
         onClick={() => router.push("/admin/dietitians")}
-        className="mb-4 inline-flex cursor-pointer items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+        className="mb-4 inline-flex cursor-pointer items-center gap-1.5 text-sm font-semibold text-primary hover:underline"
       >
         <ArrowLeft size={16} aria-hidden />
         Back to dietitians
@@ -70,89 +91,154 @@ function DietitianDetailView({ id }: { id: string }) {
       {error ? <Banner tone="danger" className="mb-4">{error}</Banner> : null}
 
       {!dietitian ? (
-        <p className="text-sm text-body">Loading…</p>
+        <div className="space-y-6">
+          <DetailCardSkeleton />
+          <div className="space-y-2">
+            <div className="h-6 w-40 bg-gray-200 rounded animate-pulse" />
+            <TableSkeleton columns={3} rows={3} />
+          </div>
+        </div>
       ) : (
         <>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h2 className="text-2xl font-bold text-heading">{dietitian.user.name}</h2>
-              <p className="mt-1 text-sm text-body">{dietitian.user.email}</p>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
+              <Avatar
+                src={dietitian.user.avatarUrl}
+                name={dietitian.user.name}
+                size="xl"
+                className="ring-2 ring-primary/20"
+              />
+              <div>
+                <h2 className="text-2xl font-bold text-heading" style={{ fontFamily: "var(--font-heading)" }}>
+                  {dietitian.user.name}
+                </h2>
+                <div className="flex items-center gap-2 mt-1 text-sm text-body/75">
+                  <Mail size={14} />
+                  <span>{dietitian.user.email}</span>
+                </div>
+              </div>
             </div>
-            <Badge tone={statusTone[dietitian.approvalStatus]}>{dietitian.approvalStatus}</Badge>
+            <div>
+              <Badge tone={statusTone[dietitian.approvalStatus]}>{dietitian.approvalStatus}</Badge>
+            </div>
           </div>
 
           <Card className="mt-6">
-            <dl className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
-              <div>
-                <dt className="text-body/70">Phone</dt>
-                <dd className="mt-0.5 font-medium">{dietitian.user.phone ?? "—"}</dd>
+            <h3 className="text-base font-bold text-heading mb-4">Credentials & Facility</h3>
+            <dl className="grid grid-cols-1 gap-5 text-sm sm:grid-cols-2 lg:grid-cols-3">
+              <div className="flex items-start gap-3 rounded-lg border border-gray-100 bg-surface/40 p-3">
+                <Phone size={18} className="text-primary mt-0.5 shrink-0" />
+                <div>
+                  <dt className="text-xs font-medium text-body/60">Phone</dt>
+                  <dd className="mt-0.5 font-semibold text-heading">{dietitian.user.phone ?? "Not provided"}</dd>
+                </div>
               </div>
-              <div>
-                <dt className="text-body/70">Registered</dt>
-                <dd className="mt-0.5 font-medium">{new Date(dietitian.user.createdAt).toLocaleDateString()}</dd>
+
+              <div className="flex items-start gap-3 rounded-lg border border-gray-100 bg-surface/40 p-3">
+                <Calendar size={18} className="text-primary mt-0.5 shrink-0" />
+                <div>
+                  <dt className="text-xs font-medium text-body/60">Registered on</dt>
+                  <dd className="mt-0.5 font-semibold text-heading">
+                    {new Date(dietitian.user.createdAt).toLocaleDateString()}
+                  </dd>
+                </div>
               </div>
-              <div>
-                <dt className="text-body/70">License number</dt>
-                <dd className="mt-0.5 font-medium">{dietitian.licenseNumber}</dd>
+
+              <div className="flex items-start gap-3 rounded-lg border border-gray-100 bg-surface/40 p-3">
+                <Award size={18} className="text-primary mt-0.5 shrink-0" />
+                <div>
+                  <dt className="text-xs font-medium text-body/60">License Number</dt>
+                  <dd className="mt-0.5 font-mono font-semibold text-heading">{dietitian.licenseNumber}</dd>
+                </div>
               </div>
-              <div>
-                <dt className="text-body/70">Specialty</dt>
-                <dd className="mt-0.5 font-medium">{dietitian.specialty}</dd>
+
+              <div className="flex items-start gap-3 rounded-lg border border-gray-100 bg-surface/40 p-3">
+                <Award size={18} className="text-primary mt-0.5 shrink-0" />
+                <div>
+                  <dt className="text-xs font-medium text-body/60">Specialty</dt>
+                  <dd className="mt-0.5 font-semibold text-heading">{dietitian.specialty}</dd>
+                </div>
               </div>
-              <div>
-                <dt className="text-body/70">Facility</dt>
-                <dd className="mt-0.5 font-medium">{dietitian.facility}</dd>
+
+              <div className="flex items-start gap-3 rounded-lg border border-gray-100 bg-surface/40 p-3">
+                <Building2 size={18} className="text-primary mt-0.5 shrink-0" />
+                <div>
+                  <dt className="text-xs font-medium text-body/60">Facility / Hospital</dt>
+                  <dd className="mt-0.5 font-semibold text-heading">{dietitian.facility}</dd>
+                </div>
               </div>
-              <div>
-                <dt className="text-body/70">Linked patients</dt>
-                <dd className="mt-0.5 font-medium">{dietitian.patients.length}</dd>
+
+              <div className="flex items-start gap-3 rounded-lg border border-gray-100 bg-surface/40 p-3">
+                <Users size={18} className="text-primary mt-0.5 shrink-0" />
+                <div>
+                  <dt className="text-xs font-medium text-body/60">Active Patients</dt>
+                  <dd className="mt-0.5 font-semibold text-heading">{dietitian.patients.length}</dd>
+                </div>
               </div>
             </dl>
 
-            <div className="mt-6 flex flex-wrap gap-2 border-t border-gray-100 pt-6">
+            <div className="mt-6 flex flex-wrap items-center gap-2.5 border-t border-gray-100 pt-6">
+              <span className="text-xs font-semibold uppercase tracking-wider text-body/60 mr-2">
+                Approval status:
+              </span>
               <Button
                 variant="primary"
                 disabled={dietitian.approvalStatus === "APPROVED" || updating}
                 onClick={() => updateStatus("APPROVED")}
+                className="flex items-center gap-1.5"
               >
-                Approve
+                <CheckCircle2 size={15} />
+                Approve dietitian
               </Button>
               <Button
                 variant="outline"
                 disabled={dietitian.approvalStatus === "REJECTED" || updating}
                 onClick={() => updateStatus("REJECTED")}
+                className="flex items-center gap-1.5"
               >
+                <XCircle size={15} />
                 Reject
               </Button>
               <Button
                 variant="danger"
                 disabled={dietitian.approvalStatus === "SUSPENDED" || updating}
                 onClick={() => updateStatus("SUSPENDED")}
+                className="flex items-center gap-1.5"
               >
-                Suspend
+                <Ban size={15} />
+                Suspend account
               </Button>
             </div>
           </Card>
 
-          <h3 className="mt-8 text-lg font-bold text-heading">Linked patients</h3>
-          <Card className="mt-3 p-0">
+          <div className="mt-8 flex items-center justify-between">
+            <h3 className="text-lg font-bold text-heading" style={{ fontFamily: "var(--font-heading)" }}>
+              Linked Patients ({dietitian.patients.length})
+            </h3>
+          </div>
+
+          <Card className="mt-3 p-0 overflow-hidden shadow-xs border-gray-200">
             {dietitian.patients.length === 0 ? (
-              <p className="p-6 text-sm text-body">No patients linked yet.</p>
+              <EmptyState
+                icon={Users}
+                title="No patients linked yet"
+                description="This dietitian does not currently have any active assigned patients."
+              />
             ) : (
               <Table>
                 <Thead>
                   <tr>
-                    <Th>Name</Th>
+                    <Th>Patient Name</Th>
                     <Th>Email</Th>
-                    <Th>Linked</Th>
+                    <Th>Linked Date</Th>
                   </tr>
                 </Thead>
                 <Tbody>
                   {dietitian.patients.map((p) => (
-                    <tr key={p.id}>
-                      <Td>{p.name}</Td>
-                      <Td>{p.email}</Td>
-                      <Td>{new Date(p.linkedAt).toLocaleDateString()}</Td>
+                    <tr key={p.id} className="hover:bg-gray-50/70 transition-colors">
+                      <Td className="font-semibold text-heading">{p.name}</Td>
+                      <Td className="text-body/80">{p.email}</Td>
+                      <Td className="text-sm">{new Date(p.linkedAt).toLocaleDateString()}</Td>
                     </tr>
                   ))}
                 </Tbody>

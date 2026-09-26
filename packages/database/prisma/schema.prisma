@@ -112,6 +112,7 @@ model User {
   name                   String
   email                  String     @unique
   phone                  String?
+  avatarUrl              String?
   passwordHash           String
   status                 UserStatus @default(ACTIVE)
   otpHash                String?

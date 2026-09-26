@@ -32,6 +32,7 @@ export type OtpVerifyInput = z.infer<typeof otpVerifySchema>;
 export const updateProfileSchema = z.object({
   name: z.string().min(1).optional(),
   phone: z.string().optional(),
+  avatarUrl: z.string().nullable().optional(),
 });
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 
