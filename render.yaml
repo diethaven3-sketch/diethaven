@@ -32,4 +32,4 @@ services:
       - key: EMAIL_FROM
         value: DietHaven Consult <onboarding@resend.dev>
       - key: WEB_ORIGIN
-        value: http://localhost:3000
+        value: https://diethaven-web.vercel.app
