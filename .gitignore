@@ -39,3 +39,6 @@ yarn-error.log*
 # Misc
 .DS_Store
 *.pem
+
+# Plain-text test logins written by db:create-dietitian
+dietitian-logins.txt

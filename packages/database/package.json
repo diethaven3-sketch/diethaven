@@ -13,7 +13,8 @@
     "db:studio": "prisma studio",
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
-    "db:create-admin": "tsx prisma/create-admin.ts"
+    "db:create-admin": "tsx prisma/create-admin.ts",
+    "db:create-dietitian": "tsx prisma/create-dietitian.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
