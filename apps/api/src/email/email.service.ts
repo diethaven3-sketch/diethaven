@@ -121,8 +121,14 @@ export class EmailService {
     return this.sendEmail({ to, subject, html, text });
   }
 
-  async sendOtp(params: { to: string; code: string }) {
-    const { to, code } = params;
+  async sendOtp(params: { to: string; code: string; heading?: string; intro?: string; validFor?: string }) {
+    const {
+      to,
+      code,
+      heading = "Sign in verification code",
+      intro = "Use the following 6-digit code to complete your login to DietHaven:",
+      validFor = "5 minutes",
+    } = params;
     const subject = `${code} is your DietHaven verification code`;
 
     const html = `
@@ -146,15 +152,15 @@ export class EmailService {
           </tr>
           <tr>
             <td style="padding:32px;">
-              <h2 style="margin:0 0 12px 0;font-size:18px;color:#1F4A2C;font-weight:600;">Sign in verification code</h2>
+              <h2 style="margin:0 0 12px 0;font-size:18px;color:#1F4A2C;font-weight:600;">${heading}</h2>
               <p style="margin:0 0 20px 0;font-size:14px;line-height:1.5;color:#444444;">
-                Use the following 6-digit code to complete your login to DietHaven:
+                ${intro}
               </p>
               <div style="margin:24px 0;background-color:#F5F5F0;border:1px solid #E6F0E8;border-radius:8px;padding:18px;text-align:center;">
                 <span style="font-family:'Courier New',Courier,monospace;font-size:32px;font-weight:700;letter-spacing:8px;color:#1F4A2C;">${code}</span>
               </div>
               <p style="margin:0 0 8px 0;font-size:13px;color:#666666;">
-                This code is valid for <strong>5 minutes</strong>.
+                This code is valid for <strong>${validFor}</strong>.
               </p>
               <p style="margin:0;font-size:12px;color:#888888;">
                 If you did not request this code, you can safely ignore this email.
@@ -173,7 +179,7 @@ export class EmailService {
 </body>
 </html>`;
 
-    const text = `DietHaven Consult\n\nYour sign-in verification code is: ${code}\n\nThis code expires in 5 minutes. If you did not request this, please ignore this email.`;
+    const text = `DietHaven Consult\n\n${heading}: ${code}\n\nThis code expires in ${validFor}. If you did not request this, please ignore this email.`;
 
     return this.sendEmail({ to, subject, html, text });
   }

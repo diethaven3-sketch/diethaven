@@ -1,9 +1,10 @@
-import { ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { randomBytes } from "node:crypto";
 import {
   OVERVIEW_WINDOW_DAYS,
   buildDietitianOverview,
+  type InviteListItem,
   type InviteRequestInput,
   type Meal,
   type OutcomeStatus,
@@ -169,8 +170,7 @@ export class DietitianService {
       select: { name: true },
     });
 
-    const webOrigin = primaryWebOrigin(this.config.get<string>("WEB_ORIGIN"));
-    const inviteUrl = `${webOrigin}/invites/${token}`;
+    const inviteUrl = this.inviteUrl(token);
 
     this.logger.log(`Invite link for ${dto.email}: ${inviteUrl}`);
 
@@ -180,18 +180,59 @@ export class DietitianService {
       inviteUrl,
     });
 
+    // The link goes back to the dietitian who created it so they can also share
+    // it over WhatsApp/SMS themselves — email delivery isn't guaranteed.
     return {
       id: invite.id,
       email: invite.email,
       expiresAt: invite.expiresAt,
-      ...(process.env.NODE_ENV === "development" ? { devToken: token } : {}),
+      inviteUrl,
+      code: token,
     };
   }
 
-  listInvites(dietitianId: string) {
-    return this.prisma.invite.findMany({
+  private inviteUrl(token: string) {
+    return `${primaryWebOrigin(this.config.get<string>("WEB_ORIGIN"))}/invites/${token}`;
+  }
+
+  async listInvites(dietitianId: string, now = new Date()): Promise<InviteListItem[]> {
+    const invites = await this.prisma.invite.findMany({
       where: { dietitianId },
       orderBy: { createdAt: "desc" },
     });
+
+    return invites.map((invite) => {
+      const status = invite.status === "PENDING" && invite.expiresAt <= now ? "EXPIRED" : invite.status;
+      const shareable = status === "PENDING";
+      return {
+        id: invite.id,
+        email: invite.email,
+        status,
+        createdAt: invite.createdAt.toISOString(),
+        expiresAt: invite.expiresAt.toISOString(),
+        acceptedAt: invite.acceptedAt?.toISOString() ?? null,
+        inviteUrl: shareable ? this.inviteUrl(invite.token) : null,
+        code: shareable ? invite.token : null,
+      };
+    });
+  }
+
+  /**
+   * Kills a pending invite's link. A shared link can travel further than
+   * intended, so the dietitian needs a way to take it back.
+   */
+  async revokeInvite(dietitianId: string, inviteId: string) {
+    const invite = await this.prisma.invite.findUnique({ where: { id: inviteId } });
+    if (!invite) {
+      throw new NotFoundException("Invite not found");
+    }
+    if (invite.dietitianId !== dietitianId) {
+      throw new ForbiddenException("You do not have access to this invite");
+    }
+    if (invite.status !== "PENDING") {
+      throw new BadRequestException("Only pending invites can be revoked");
+    }
+    await this.prisma.invite.update({ where: { id: inviteId }, data: { status: "EXPIRED" } });
+    await this.audit.log({ userId: dietitianId, action: "UPDATE", entityType: "Invite", entityId: inviteId });
   }
 }

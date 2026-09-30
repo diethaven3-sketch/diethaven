@@ -373,6 +373,15 @@ model Invite {
   createdAt   DateTime     @default(now())
   acceptedAt  DateTime?
 
+  // Proof the person accepting owns the invited inbox: a hashed 6-digit code
+  // emailed on request and required to accept. Without it, anyone holding a
+  // forwarded link could register as the invited patient.
+  verificationHash      String?
+  verificationExpiresAt DateTime?
+  verificationSentAt    DateTime?
+  verificationAttempts  Int       @default(0)
+  verificationSendCount Int       @default(0)
+
   @@index([dietitianId])
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
   Activity,
@@ -18,8 +18,6 @@ import {
   LOGGING_GAP_DAYS,
   LOW_ADHERENCE_PERCENT,
   OUTCOME_STATUS_LABELS,
-  inviteRequestSchema,
-  validateWithSchema,
   type AttentionReason,
   type DietitianOverview,
   type OutcomeStatus,
@@ -35,11 +33,11 @@ import { Button } from "../../components/ui/button";
 import { Banner } from "../../components/ui/banner";
 import { Card } from "../../components/ui/card";
 import { EmptyState } from "../../components/ui/empty-state";
-import { Field } from "../../components/ui/input";
 import { Modal } from "../../components/ui/modal";
 import { SearchInput } from "../../components/ui/search-input";
 import { Skeleton, StatCardSkeleton, TableSkeleton } from "../../components/ui/skeleton";
 import { Table, Thead, Tbody, Th, Td } from "../../components/ui/table";
+import { InvitePatientForm } from "../../components/invites/invite-form";
 import { ActivityChart, HorizontalBars, Meter, Sparkline } from "../../components/dashboard/charts";
 
 interface DietitianProfile {
@@ -103,96 +101,6 @@ function relativeDay(iso: string | null) {
 
 function attentionScore(p: PatientOverview) {
   return p.attention.reduce((sum, reason) => sum + ATTENTION_WEIGHT[reason], 0);
-}
-
-// ---------------------------------------------------------------------------
-
-function InvitePatientForm({ onInvited }: { onInvited: () => void }) {
-  const { token } = useAuth();
-  const [email, setEmail] = useState("");
-  const [fieldError, setFieldError] = useState<string | undefined>();
-  const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ email: string; devToken?: string } | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  const onSubmit = async (event: FormEvent) => {
-    event.preventDefault();
-    setError(null);
-    setFieldError(undefined);
-    setResult(null);
-
-    const validation = validateWithSchema(inviteRequestSchema, { email: email.trim() });
-    if (!validation.success) {
-      setFieldError(validation.errors.email);
-      setError(validation.firstError);
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const res = await apiFetch<{ email: string; devToken?: string }>("/dietitian/invites", {
-        method: "POST",
-        token,
-        body: validation.data,
-      });
-      setResult(res);
-      setEmail("");
-      setFieldError(undefined);
-      onInvited();
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message);
-        if (err.fieldErrors.email) {
-          setFieldError(err.fieldErrors.email);
-        }
-      } else {
-        setError("Failed to send invite.");
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <>
-      <form className="flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={onSubmit} noValidate>
-        <div className="flex-1">
-          <Field
-            label="Patient email"
-            type="email"
-            name="invite-email"
-            value={email}
-            onChange={(e) => {
-              setEmail(e.target.value);
-              if (fieldError) setFieldError(undefined);
-              if (error) setError(null);
-            }}
-            error={fieldError}
-            required
-          />
-        </div>
-        <Button type="submit" loading={submitting}>
-          Send invite
-        </Button>
-      </form>
-      {error ? (
-        <Banner tone="danger" className="mt-3">
-          {error}
-        </Banner>
-      ) : null}
-      {result ? (
-        <Banner tone="success" className="mt-3">
-          Invite created for {result.email}.
-          {result.devToken ? (
-            <>
-              {" "}
-              Dev-only accept link token: <code className="font-mono">{result.devToken}</code>
-            </>
-          ) : null}
-        </Banner>
-      ) : null}
-    </>
-  );
 }
 
 // ---------------------------------------------------------------------------

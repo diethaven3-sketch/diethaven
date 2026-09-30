@@ -10,27 +10,38 @@ function niceScale(max: number) {
   return { top: step * 4, ticks: [0, step * 2, step * 4] };
 }
 
-function shortDate(iso: string) {
-  return new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "short",
-    timeZone: "UTC",
-  });
+export interface ColumnDatum {
+  key: string;
+  value: number;
+  /** Tooltip heading and body, e.g. a date and "3 patients · 5 entries". */
+  title: string;
+  detail: string;
 }
 
 /**
- * Single-series column chart of patients who logged food each day. One series,
- * so no legend — the card title names it. Every column has a hover tooltip and
- * the numbers are repeated in a screen-reader table.
+ * Single-series column chart. One series, so no legend — the card title names
+ * it. The latest column is emphasised and labelled; every column has a hover
+ * tooltip, and the numbers are repeated in a screen-reader table.
  */
-export function ActivityChart({ days }: { days: { date: string; patients: number; entries: number }[] }) {
-  const max = Math.max(0, ...days.map((d) => d.patients));
+export function ColumnChart({
+  data,
+  startLabel,
+  endLabel,
+  caption,
+  heightClass = "h-44",
+}: {
+  data: ColumnDatum[];
+  startLabel: string;
+  endLabel: string;
+  caption: string;
+  heightClass?: string;
+}) {
+  const max = Math.max(0, ...data.map((d) => d.value));
   const { top, ticks } = niceScale(max);
-  const last = days[days.length - 1];
 
   return (
     <div>
-      <div className="relative ml-7 h-44">
+      <div className={clsx("relative ml-7", heightClass)}>
         {ticks.map((tick) => (
           <div
             key={tick}
@@ -41,10 +52,10 @@ export function ActivityChart({ days }: { days: { date: string; patients: number
           </div>
         ))}
         <div className="absolute inset-0 flex items-end" aria-hidden>
-          {days.map((day, index) => {
-            const isLast = index === days.length - 1;
+          {data.map((d, index) => {
+            const isLast = index === data.length - 1;
             return (
-              <div key={day.date} className="group relative flex h-full flex-1 items-end justify-center">
+              <div key={d.key} className="group relative flex h-full flex-1 items-end justify-center">
                 {/* Full-height hit target, wider than the bar. */}
                 <div className="absolute inset-0 rounded-md transition-colors group-hover:bg-surface-alt/60" />
                 <div
@@ -52,22 +63,19 @@ export function ActivityChart({ days }: { days: { date: string; patients: number
                     "relative w-full max-w-6 rounded-t-sm transition-opacity",
                     isLast ? "bg-primary" : "bg-primary/70 group-hover:bg-primary",
                   )}
-                  style={{ height: day.patients === 0 ? 2 : `${(day.patients / top) * 100}%`, marginInline: 1 }}
+                  style={{ height: d.value === 0 ? 2 : `${(d.value / top) * 100}%`, marginInline: 1 }}
                 />
-                {isLast && day.patients > 0 ? (
+                {isLast && d.value > 0 ? (
                   <span
                     className="absolute text-xs font-semibold text-heading"
-                    style={{ bottom: `calc(${(day.patients / top) * 100}% + 4px)` }}
+                    style={{ bottom: `calc(${(d.value / top) * 100}% + 4px)` }}
                   >
-                    {day.patients}
+                    {d.value}
                   </span>
                 ) : null}
                 <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded-lg bg-heading px-2.5 py-1.5 text-xs text-white shadow-lg group-hover:block">
-                  <p className="font-semibold">{shortDate(day.date)}</p>
-                  <p>
-                    {day.patients} {day.patients === 1 ? "patient" : "patients"} · {day.entries}{" "}
-                    {day.entries === 1 ? "entry" : "entries"}
-                  </p>
+                  <p className="font-semibold">{d.title}</p>
+                  <p>{d.detail}</p>
                 </div>
               </div>
             );
@@ -75,29 +83,48 @@ export function ActivityChart({ days }: { days: { date: string; patients: number
         </div>
       </div>
       <div className="ml-7 mt-2 flex justify-between text-[11px] text-body/60" aria-hidden>
-        <span>{days[0] ? shortDate(days[0].date) : ""}</span>
-        <span>{last ? "Today" : ""}</span>
+        <span>{startLabel}</span>
+        <span>{endLabel}</span>
       </div>
       <table className="sr-only">
-        <caption>Patients who logged food, by day</caption>
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Patients</th>
-            <th>Entries</th>
-          </tr>
-        </thead>
+        <caption>{caption}</caption>
         <tbody>
-          {days.map((d) => (
-            <tr key={d.date}>
-              <td>{d.date}</td>
-              <td>{d.patients}</td>
-              <td>{d.entries}</td>
+          {data.map((d) => (
+            <tr key={d.key}>
+              <th scope="row">{d.title}</th>
+              <td>{d.detail}</td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
+  );
+}
+
+export function shortDate(iso: string) {
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  });
+}
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/** Patients who logged food each day (dietitian dashboard). */
+export function ActivityChart({ days }: { days: { date: string; patients: number; entries: number }[] }) {
+  return (
+    <ColumnChart
+      caption="Patients who logged food, by day"
+      startLabel={days[0] ? shortDate(days[0].date) : ""}
+      endLabel="Today"
+      data={days.map((d) => ({
+        key: d.date,
+        value: d.patients,
+        title: shortDate(d.date),
+        detail: `${plural(d.patients, "patient", "patients")} · ${plural(d.entries, "entry", "entries")}`,
+      }))}
+    />
   );
 }
 

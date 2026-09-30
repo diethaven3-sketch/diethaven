@@ -3,11 +3,12 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, LogOut, Settings } from "lucide-react";
+import { LayoutDashboard, LogOut, Mail, Settings } from "lucide-react";
 import { useAuth } from "../lib/auth-context";
 
 const navItems = [
   { href: "/dashboard", label: "Patients", icon: LayoutDashboard },
+  { href: "/dashboard/invites", label: "Invites", icon: Mail },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
 

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Param, Post } from "@nestjs/common";
 import { inviteRequestSchema, type InviteRequestInput } from "@repo/types";
 import { Role } from "database";
 import { Roles } from "../common/decorators/roles.decorator";
@@ -42,5 +42,11 @@ export class DietitianController {
   @Get("invites")
   listInvites(@CurrentUser() user: AuthenticatedUser) {
     return this.dietitianService.listInvites(user.id);
+  }
+
+  @Post("invites/:id/revoke")
+  @HttpCode(204)
+  revokeInvite(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string) {
+    return this.dietitianService.revokeInvite(user.id, id);
   }
 }

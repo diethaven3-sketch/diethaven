@@ -1,8 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
 import { Pressable, Text } from "react-native";
-import { acceptInviteSchema, validateWithSchema } from "@repo/types";
+import {
+  acceptInviteSchema,
+  validateWithSchema,
+  type InvitePreview,
+  type InviteVerificationSent,
+} from "@repo/types";
 import { colors } from "@repo/ui-tokens";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
@@ -14,12 +19,6 @@ import { SegmentedControl } from "@/components/ui/segmented-control";
 import { ConsentBox } from "@/components/ui/consent-box";
 import { Banner } from "@/components/ui/banner";
 
-interface InvitePreview {
-  email: string;
-  dietitianName: string;
-  expired: boolean;
-}
-
 const initialForm = {
   name: "",
   password: "",
@@ -27,6 +26,7 @@ const initialForm = {
   dateOfBirth: "",
   sex: null as "MALE" | "FEMALE" | "OTHER" | null,
   contact: "",
+  verificationCode: "",
 };
 
 export default function AcceptInvite() {
@@ -42,6 +42,18 @@ export default function AcceptInvite() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Email verification: accepting requires a code sent to the invited inbox.
+  const [codeSent, setCodeSent] = useState(false);
+  const [sendingCode, setSendingCode] = useState(false);
+  const [codeError, setCodeError] = useState<string | null>(null);
+  const [resendIn, setResendIn] = useState(0);
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const timer = setTimeout(() => setResendIn((s) => s - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendIn]);
 
   const clearFieldError = (field: string) => {
     if (fieldErrors[field]) {
@@ -77,6 +89,20 @@ export default function AcceptInvite() {
     }
   };
 
+  const sendCode = async () => {
+    setCodeError(null);
+    setSendingCode(true);
+    try {
+      const res = await apiFetch<InviteVerificationSent>(`/invites/${token.trim()}/verification`, { method: "POST" });
+      setCodeSent(true);
+      setResendIn(res.resendAfterSeconds);
+    } catch (err) {
+      setCodeError(err instanceof ApiError ? err.message : "We couldn't send the code. Please try again.");
+    } finally {
+      setSendingCode(false);
+    }
+  };
+
   const onSubmit = async () => {
     setFormError(null);
 
@@ -92,6 +118,7 @@ export default function AcceptInvite() {
       phone: form.phone.trim() || undefined,
       contact: form.contact.trim() || undefined,
       consentAccepted: true,
+      verificationCode: form.verificationCode.trim(),
     };
 
     const validation = validateWithSchema(acceptInviteSchema, payload);
@@ -161,6 +188,42 @@ export default function AcceptInvite() {
 
       {formError ? <Banner tone="danger">{formError}</Banner> : null}
 
+      <Text className="font-heading-bold text-lg text-heading">Confirm your email</Text>
+      <Text className="font-body text-sm leading-5 text-muted">
+        {codeSent
+          ? `We sent a 6-digit code to ${preview.maskedEmail}. It expires in 10 minutes.`
+          : `This invite is for ${preview.maskedEmail}. We'll email a code there to confirm it's you.`}
+      </Text>
+      {codeError ? <Banner tone="danger">{codeError}</Banner> : null}
+      {codeSent ? (
+        <>
+          <TextField
+            label="Verification code"
+            value={form.verificationCode}
+            onChangeText={update("verificationCode")}
+            error={fieldErrors.verificationCode}
+            keyboardType="number-pad"
+            maxLength={6}
+            autoComplete="one-time-code"
+            textContentType="oneTimeCode"
+          />
+          <Pressable
+            accessibilityRole="button"
+            disabled={resendIn > 0 || sendingCode}
+            onPress={sendCode}
+            className="-mt-2 self-start"
+          >
+            <Text className={`font-body-medium text-xs ${resendIn > 0 ? "text-muted" : "text-primary"}`}>
+              {resendIn > 0 ? `Resend code in ${resendIn}s` : "Resend code"}
+            </Text>
+          </Pressable>
+        </>
+      ) : (
+        <Button variant="outline" onPress={sendCode} loading={sendingCode}>
+          Send verification code
+        </Button>
+      )}
+
       <TextField label="Full name" value={form.name} onChangeText={update("name")} error={fieldErrors.name} autoCapitalize="words" />
       <TextField
         label="Password"
@@ -201,7 +264,7 @@ export default function AcceptInvite() {
         error={fieldErrors.consent}
       />
 
-      <Button onPress={onSubmit} loading={submitting}>
+      <Button onPress={onSubmit} loading={submitting} disabled={!codeSent}>
         Complete registration
       </Button>
     </Screen>
