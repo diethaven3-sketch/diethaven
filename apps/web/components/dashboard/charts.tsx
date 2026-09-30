@@ -40,7 +40,7 @@ export function ColumnChart({
   const { top, ticks } = niceScale(max);
 
   return (
-    <div>
+    <div className="relative">
       <div className={clsx("relative ml-7", heightClass)}>
         {ticks.map((tick) => (
           <div

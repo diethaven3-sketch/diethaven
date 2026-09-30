@@ -141,7 +141,10 @@ export function AdminShell({ title, children }: { title: string; children: React
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+      {/* relative: absolutely positioned descendants (e.g. sr-only tables) must be
+          contained by this scroll column, or they stretch the page and add a
+          second, page-level scrollbar. */}
+      <div className="relative flex min-w-0 flex-1 flex-col overflow-y-auto">
         {/* Mobile top bar + horizontal nav */}
         <div className="sticky top-0 z-20 md:hidden">
           <header className="flex items-center justify-between border-b border-gray-200 bg-primary px-4 py-3.5 text-white">
