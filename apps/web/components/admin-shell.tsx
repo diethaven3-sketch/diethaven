@@ -10,7 +10,7 @@ import {
   ScrollText,
   Settings,
   LogOut,
-  MoreVertical,
+  EllipsisVertical,
   User as UserIcon,
   ShieldCheck,
 } from "lucide-react";
@@ -116,7 +116,7 @@ export function AdminShell({ title, children }: { title: string; children: React
                     {user?.email}
                   </p>
                 </div>
-                <MoreVertical size={16} className="text-white/60 shrink-0" />
+                <EllipsisVertical size={16} className="text-white/60 shrink-0" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent side="top" align="start" className="w-56 mb-2">

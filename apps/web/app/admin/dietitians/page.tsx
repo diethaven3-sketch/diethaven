@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { UserCheck, SearchX, MoreHorizontal, CheckCircle2, XCircle, Ban, ExternalLink } from "lucide-react";
+import { UserCheck, SearchX, EllipsisVertical, CheckCircle2, XCircle, Ban, ExternalLink } from "lucide-react";
 import { apiFetch, ApiError } from "../../../lib/api-client";
 import { useAuth } from "../../../lib/auth-context";
 import { RequireRole } from "../../../components/require-role";
@@ -242,7 +242,7 @@ function DietitiansPage() {
                             disabled={updatingId === d.id}
                             aria-label="Dietitian actions"
                           >
-                            <MoreHorizontal size={15} />
+                            <EllipsisVertical size={16} aria-hidden />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
