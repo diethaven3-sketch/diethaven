@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { UserCheck, SearchX, EllipsisVertical, CheckCircle2, XCircle, Ban, ExternalLink } from "lucide-react";
+import { SearchX, EllipsisVertical, CheckCircle2, XCircle, Ban, ExternalLink } from "lucide-react";
 import { apiFetch, ApiError } from "../../../lib/api-client";
 import { useAuth } from "../../../lib/auth-context";
 import { RequireRole } from "../../../components/require-role";
@@ -236,14 +236,14 @@ function DietitiansPage() {
                     <div className="flex items-center justify-end gap-1.5">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className="h-8 w-8 p-0 rounded-lg"
+                          <button
+                            type="button"
                             disabled={updatingId === d.id}
-                            aria-label="Dietitian actions"
+                            aria-label={`Actions for ${d.user.name}`}
+                            className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-body/60 transition-colors hover:bg-surface-alt hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-40 data-[state=open]:bg-surface-alt data-[state=open]:text-primary"
                           >
-                            <EllipsisVertical size={16} aria-hidden />
-                          </Button>
+                            <EllipsisVertical size={18} aria-hidden />
+                          </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
