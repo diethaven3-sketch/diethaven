@@ -1,7 +1,13 @@
 import { ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { randomBytes } from "node:crypto";
-import type { InviteRequestInput } from "@repo/types";
+import {
+  OVERVIEW_WINDOW_DAYS,
+  buildDietitianOverview,
+  type InviteRequestInput,
+  type Meal,
+  type OutcomeStatus,
+} from "@repo/types";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { EmailService } from "../email/email.service";
@@ -54,6 +60,75 @@ export class DietitianService {
     });
 
     return patients;
+  }
+
+  /**
+   * Caseload summary for the dashboard. Reads only this dietitian's linked
+   * patients, and audits the view of each clinical entity type it touches.
+   */
+  async getOverview(dietitianId: string, now = new Date()) {
+    const patients = await this.prisma.patientProfile.findMany({
+      where: { dietitianId },
+      select: patientSelect,
+      orderBy: { createdAt: "desc" },
+    });
+    const ids = patients.map((p) => p.userId);
+    const windowStart = new Date(now.getTime() - OVERVIEW_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+
+    const [pendingInvites, assessments, diagnosisCounts, interventions, followUps, foodLogs, lastLogs] =
+      await Promise.all([
+        this.prisma.invite.count({ where: { dietitianId, status: "PENDING", expiresAt: { gt: now } } }),
+        this.prisma.assessment.findMany({
+          where: { patientId: { in: ids } },
+          select: { patientId: true, domain: true, date: true, domainData: true },
+        }),
+        this.prisma.diagnosis.groupBy({
+          by: ["patientId"],
+          where: { patientId: { in: ids }, dietitianId, status: "ACTIVE" },
+          _count: { _all: true },
+        }),
+        this.prisma.intervention.findMany({
+          where: { patientId: { in: ids }, dietitianId, status: "ACTIVE" },
+          select: { patientId: true, mealPlan: { select: { meals: true } } },
+          orderBy: { createdAt: "desc" },
+        }),
+        this.prisma.followUp.findMany({
+          where: { patientId: { in: ids }, dietitianId },
+          select: { patientId: true, date: true, outcome: true },
+          orderBy: { date: "desc" },
+          distinct: ["patientId"],
+        }),
+        this.prisma.foodLog.findMany({
+          where: { patientId: { in: ids }, date: { gte: windowStart } },
+          select: { patientId: true, date: true, items: true },
+        }),
+        this.prisma.foodLog.groupBy({
+          by: ["patientId"],
+          where: { patientId: { in: ids } },
+          _max: { date: true },
+        }),
+      ]);
+
+    for (const entityType of ["PatientProfile", "Assessment", "FoodLog"]) {
+      await this.audit.log({ userId: dietitianId, action: "VIEW", entityType, entityId: dietitianId });
+    }
+
+    return buildDietitianOverview({
+      now,
+      patients,
+      pendingInvites,
+      assessments,
+      activeDiagnosisCounts: new Map(diagnosisCounts.map((d) => [d.patientId, d._count._all])),
+      activeInterventions: interventions.map((i) => ({
+        patientId: i.patientId,
+        meals: (i.mealPlan?.meals as Meal[] | undefined) ?? null,
+      })),
+      latestFollowUps: followUps.map((f) => ({ ...f, outcome: f.outcome as OutcomeStatus })),
+      foodLogs,
+      lastLogAt: new Map(
+        lastLogs.filter((l) => l._max.date).map((l) => [l.patientId, l._max.date as Date]),
+      ),
+    });
   }
 
   async getPatient(dietitianId: string, patientUserId: string) {

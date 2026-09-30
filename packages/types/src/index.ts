@@ -6,6 +6,7 @@ export * from "./diagnosis";
 export * from "./intervention";
 export * from "./monitoring";
 export * from "./food-log";
+export * from "./dietitian-overview";
 export * from "./admin";
 export * from "./food-exchange";
 export * from "./audit";

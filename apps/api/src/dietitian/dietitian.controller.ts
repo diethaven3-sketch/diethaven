@@ -16,6 +16,11 @@ export class DietitianController {
     return this.dietitianService.getOwnProfile(user.id);
   }
 
+  @Get("overview")
+  getOverview(@CurrentUser() user: AuthenticatedUser) {
+    return this.dietitianService.getOverview(user.id);
+  }
+
   @Get("patients")
   listPatients(@CurrentUser() user: AuthenticatedUser) {
     return this.dietitianService.listPatients(user.id);
