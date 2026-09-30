@@ -21,6 +21,8 @@ import { useAuth } from "../../lib/auth-context";
 import { Button } from "../ui/button";
 import { Banner } from "../ui/banner";
 import { Card } from "../ui/card";
+import { Pagination } from "../ui/pagination";
+import { usePagination } from "../../lib/use-pagination";
 import { Badge } from "../ui/badge";
 import { SelectField } from "../ui/select";
 import { TextareaField } from "../ui/textarea";
@@ -415,6 +417,7 @@ export function MonitoringPanel({
 }) {
   const trends = useMemo(() => labTrends(assessments), [assessments]);
   const visits = followUps ?? [];
+  const pager = usePagination(visits, 5);
   // Adherence is measured against the plan on the active intervention; if
   // several are active the most recent one wins.
   const activeMeals =
@@ -488,24 +491,27 @@ export function MonitoringPanel({
               <p className="text-sm text-body">No follow-up visits documented yet.</p>
             </Card>
           ) : (
-            visits.map((visit) => (
-              <Card key={visit.id}>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <Badge tone={outcomeTone[visit.outcome]}>{OUTCOME_STATUS_LABELS[visit.outcome]}</Badge>
-                  <p className="text-xs text-body">{formatDate(visit.date)}</p>
-                </div>
-                {visit.diagnosis ? (
-                  <p className="mt-2 text-sm text-heading">
-                    Reviewing: {visit.diagnosis.problemCode ? `${visit.diagnosis.problemCode} · ` : ""}
-                    {visit.diagnosis.problem}
-                  </p>
-                ) : null}
-                {visit.intervention ? (
-                  <p className="mt-0.5 text-sm text-body">Intervention: {visit.intervention.carePlanDetails}</p>
-                ) : null}
-                <p className="mt-2 whitespace-pre-wrap text-sm text-body">{visit.notes}</p>
-              </Card>
-            ))
+            <>
+              {pager.pageItems.map((visit) => (
+                <Card key={visit.id}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <Badge tone={outcomeTone[visit.outcome]}>{OUTCOME_STATUS_LABELS[visit.outcome]}</Badge>
+                    <p className="text-xs text-body">{formatDate(visit.date)}</p>
+                  </div>
+                  {visit.diagnosis ? (
+                    <p className="mt-2 text-sm text-heading">
+                      Reviewing: {visit.diagnosis.problemCode ? `${visit.diagnosis.problemCode} · ` : ""}
+                      {visit.diagnosis.problem}
+                    </p>
+                  ) : null}
+                  {visit.intervention ? (
+                    <p className="mt-0.5 text-sm text-body">Intervention: {visit.intervention.carePlanDetails}</p>
+                  ) : null}
+                  <p className="mt-2 whitespace-pre-wrap text-sm text-body">{visit.notes}</p>
+                </Card>
+              ))}
+              <Pagination {...pager} onPageChange={pager.setPage} noun="visits" />
+            </>
           )}
         </div>
       </div>

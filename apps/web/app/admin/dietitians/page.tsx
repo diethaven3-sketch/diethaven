@@ -17,6 +17,8 @@ import { CustomSelect } from "../../../components/ui/custom-select";
 import { EmptyState } from "../../../components/ui/empty-state";
 import { TableSkeleton } from "../../../components/ui/skeleton";
 import { Table, Thead, Tbody, Th, Td } from "../../../components/ui/table";
+import { Pagination } from "../../../components/ui/pagination";
+import { usePagination } from "../../../lib/use-pagination";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -111,6 +113,7 @@ function DietitiansPage() {
     }
     return list;
   }, [dietitians, search, statusFilter]);
+  const pager = usePagination(filtered ?? [], 10, `${search}|${statusFilter}`);
 
   return (
     <AdminShell title="Dietitian accounts">
@@ -198,7 +201,7 @@ function DietitiansPage() {
               </tr>
             </Thead>
             <Tbody>
-              {filtered.map((d) => (
+              {pager.pageItems.map((d) => (
                 <tr key={d.id} className="hover:bg-gray-50/70 transition-colors">
                   <Td>
                     <div className="flex items-center gap-3">
@@ -278,6 +281,9 @@ function DietitiansPage() {
             </Tbody>
           </Table>
         )}
+        {filtered && filtered.length > 0 ? (
+          <Pagination {...pager} onPageChange={pager.setPage} noun="dietitians" className="border-t border-gray-200 px-5 py-3" />
+        ) : null}
       </Card>
     </AdminShell>
   );

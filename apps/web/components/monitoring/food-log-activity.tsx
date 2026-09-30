@@ -13,6 +13,8 @@ import {
 import { Card } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { Table, Thead, Tbody, Th, Td } from "../ui/table";
+import { Pagination } from "../ui/pagination";
+import { usePagination } from "../../lib/use-pagination";
 
 export interface FoodLogRow {
   id: string;
@@ -51,6 +53,8 @@ export function FoodLogActivity({ logs, activeMeals }: { logs: FoodLogRow[]; act
   const planned = useMemo(() => plannedExchanges(activeMeals ?? []), [activeMeals]);
   const days = useMemo(() => adherenceByDay(logs, planned), [logs, planned]);
   const average = useMemo(() => averageAdherence(days), [days]);
+  const dayPager = usePagination(days, 10);
+  const entryPager = usePagination(logs, 10);
 
   if (logs.length === 0) {
     return (
@@ -62,8 +66,6 @@ export function FoodLogActivity({ logs, activeMeals }: { logs: FoodLogRow[]; act
       </Card>
     );
   }
-
-  const recent = logs.slice(0, 12);
 
   return (
     <div className="flex flex-col gap-4">
@@ -110,7 +112,7 @@ export function FoodLogActivity({ logs, activeMeals }: { logs: FoodLogRow[]; act
               </tr>
             </Thead>
             <Tbody>
-              {days.map((day) => (
+              {dayPager.pageItems.map((day) => (
                 <tr key={day.date}>
                   <Td>{formatDate(day.date)}</Td>
                   <Td>{day.entries}</Td>
@@ -133,15 +135,16 @@ export function FoodLogActivity({ logs, activeMeals }: { logs: FoodLogRow[]; act
               ))}
             </Tbody>
           </Table>
+          <Pagination {...dayPager} onPageChange={dayPager.setPage} noun="days" className="border-t border-gray-200 px-5 py-3" />
         </Card>
       ) : null}
 
       <Card className="p-0">
         <div className="border-b border-gray-200 p-5">
-          <h4 className="text-sm font-bold text-heading">Recent entries</h4>
+          <h4 className="text-sm font-bold text-heading">Diary entries</h4>
         </div>
         <ul className="divide-y divide-gray-100">
-          {recent.map((log) => (
+          {entryPager.pageItems.map((log) => (
             <li key={log.id} className="p-5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-medium text-heading">{MEAL_TYPE_LABELS[log.mealType]}</p>
@@ -168,11 +171,7 @@ export function FoodLogActivity({ logs, activeMeals }: { logs: FoodLogRow[]; act
             </li>
           ))}
         </ul>
-        {logs.length > recent.length ? (
-          <p className="border-t border-gray-200 p-4 text-xs text-body">
-            Showing the {recent.length} most recent of {logs.length} entries.
-          </p>
-        ) : null}
+        <Pagination {...entryPager} onPageChange={entryPager.setPage} noun="entries" className="border-t border-gray-200 px-5 py-3" />
       </Card>
     </div>
   );

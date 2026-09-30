@@ -4,6 +4,8 @@ import { LAB_REFERENCES, type AssessmentDomain, type LabFlag, type LabMarker } f
 import { Card } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { Table, Thead, Tbody, Th, Td } from "../ui/table";
+import { Pagination } from "../ui/pagination";
+import { usePagination } from "../../lib/use-pagination";
 import { fieldLabel as label, formatFieldValue as formatValue } from "./field-labels";
 
 export interface AssessmentRow {
@@ -115,6 +117,8 @@ function BiochemicalEntry({ entry }: { entry: AssessmentRow }) {
 }
 
 function AnthropometricHistory({ entries }: { entries: AssessmentRow[] }) {
+  const pager = usePagination(entries, 10);
+
   return (
     <Card className="p-0">
       <Table>
@@ -127,7 +131,7 @@ function AnthropometricHistory({ entries }: { entries: AssessmentRow[] }) {
           </tr>
         </Thead>
         <Tbody>
-          {entries.map((entry) => (
+          {pager.pageItems.map((entry) => (
             <tr key={entry.id}>
               <Td>{formatDate(entry.date)}</Td>
               <Td>{formatValue(entry.domainData.height)}</Td>
@@ -137,11 +141,15 @@ function AnthropometricHistory({ entries }: { entries: AssessmentRow[] }) {
           ))}
         </Tbody>
       </Table>
+      <Pagination {...pager} onPageChange={pager.setPage} noun="measurements" className="border-t border-gray-200 px-5 py-3" />
     </Card>
   );
 }
 
 export function DomainHistory({ domain, entries }: { domain: AssessmentDomain; entries: AssessmentRow[] }) {
+  // Switching domain tabs starts back on page 1.
+  const pager = usePagination(entries, 5, domain);
+
   if (entries.length === 0) {
     return (
       <Card>
@@ -156,13 +164,14 @@ export function DomainHistory({ domain, entries }: { domain: AssessmentDomain; e
 
   return (
     <div className="flex flex-col gap-4">
-      {entries.map((entry) =>
+      {pager.pageItems.map((entry) =>
         domain === "BIOCHEMICAL" ? (
           <BiochemicalEntry key={entry.id} entry={entry} />
         ) : (
           <NarrativeEntry key={entry.id} entry={entry} />
         ),
       )}
+      <Pagination {...pager} onPageChange={pager.setPage} noun="entries" />
     </div>
   );
 }

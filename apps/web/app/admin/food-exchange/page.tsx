@@ -18,6 +18,8 @@ import { EmptyState } from "../../../components/ui/empty-state";
 import { TableSkeleton } from "../../../components/ui/skeleton";
 import { Modal } from "../../../components/ui/modal";
 import { Table, Thead, Tbody, Th, Td } from "../../../components/ui/table";
+import { Pagination } from "../../../components/ui/pagination";
+import { usePagination } from "../../../lib/use-pagination";
 
 interface FoodItem {
   id: string;
@@ -278,6 +280,7 @@ function FoodExchangePage() {
         item.exchangeGroup.toLowerCase().includes(q),
     );
   }, [items, search]);
+  const pager = usePagination(filtered ?? [], 15, `${search}|${groupFilter}`);
 
   return (
     <AdminShell title="Nigerian Food Exchange List">
@@ -376,7 +379,7 @@ function FoodExchangePage() {
               </tr>
             </Thead>
             <Tbody>
-              {filtered.map((item) => (
+              {pager.pageItems.map((item) => (
                 <tr key={item.id} className="hover:bg-gray-50/70 transition-colors">
                   <Td className="font-semibold text-heading">{item.foodName}</Td>
                   <Td>
@@ -413,6 +416,9 @@ function FoodExchangePage() {
             </Tbody>
           </Table>
         )}
+        {filtered && filtered.length > 0 ? (
+          <Pagination {...pager} onPageChange={pager.setPage} noun="foods" className="border-t border-gray-200 px-5 py-3" />
+        ) : null}
       </Card>
 
       {adding ? <ItemFormModal initial={null} onClose={() => setAdding(false)} onSaved={load} /> : null}

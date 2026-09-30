@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import type { FoodLogCreateInput, FoodLogUpdateInput, FoodLogsQuery } from "@repo/types";
+import type { FoodLogCreateInput, FoodLogUpdateInput, FoodLogsQuery, OwnFoodLogsQuery } from "@repo/types";
 import type { Prisma } from "database";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
@@ -47,11 +47,16 @@ export class FoodLogsService {
     return log;
   }
 
-  async listOwn(patientId: string, query: FoodLogsQuery) {
+  async listOwn(patientId: string, query: OwnFoodLogsQuery) {
     const date = this.dateFilter(query);
     const logs = await this.prisma.foodLog.findMany({
       where: { patientId, ...(date ? { date } : {}) },
-      orderBy: { date: "desc" },
+      // id breaks ties so entries sharing a timestamp page in a stable order.
+      orderBy: [{ date: "desc" }, { id: "desc" }],
+      ...(query.limit ? { take: query.limit } : {}),
+      // The where clause still scopes results to this patient, so a cursor id
+      // from someone else's diary returns none of their entries.
+      ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
     });
 
     await this.audit.log({

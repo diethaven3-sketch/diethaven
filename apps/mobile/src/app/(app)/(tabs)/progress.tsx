@@ -1,8 +1,10 @@
 import { Lock } from "lucide-react-native";
-import { RefreshControl, ScrollView, Text, View } from "react-native";
+import { RefreshControl, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "@repo/ui-tokens";
 import { useApiQuery } from "@/lib/use-api";
+import { useIncrementalList } from "@/lib/use-infinite";
+import { InfiniteScrollView } from "@/components/infinite-scroll-view";
 import {
   bmiCategory,
   formatDate,
@@ -36,10 +38,14 @@ export default function Progress() {
   const assessments = data ?? [];
   const latest = assessments[0];
   const change = weightChange(assessments);
+  // The chart and summary use every measurement; only the table rows are revealed as you scroll.
+  const history = useIncrementalList(assessments, 15);
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
-      <ScrollView
+      <InfiniteScrollView
+        hasMore={history.hasMore}
+        onEndReached={history.loadMore}
         contentContainerClassName="gap-4 px-5 pb-28 pt-4"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refetch} tintColor={colors.primary} />}
       >
@@ -94,17 +100,17 @@ export default function Progress() {
                 </Text>
                 <Text className="w-14 text-right font-body-medium text-xs uppercase tracking-wide text-body">BMI</Text>
               </View>
-              {assessments.map((assessment, index) => (
+              {history.visible.map((assessment, index) => (
                 <HistoryRow
                   key={assessment.id}
                   assessment={assessment}
-                  last={index === assessments.length - 1}
+                  last={index === history.visible.length - 1}
                 />
               ))}
             </Card>
           </>
         )}
-      </ScrollView>
+      </InfiniteScrollView>
     </SafeAreaView>
   );
 }

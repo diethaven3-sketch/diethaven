@@ -19,6 +19,8 @@ import { useAuth } from "../../lib/auth-context";
 import { Button } from "../ui/button";
 import { Banner } from "../ui/banner";
 import { Card } from "../ui/card";
+import { Pagination } from "../ui/pagination";
+import { usePagination } from "../../lib/use-pagination";
 import { Badge } from "../ui/badge";
 import { Field } from "../ui/input";
 import { SelectField } from "../ui/select";
@@ -471,6 +473,7 @@ export function InterventionPanel({
   onChanged: () => void;
 }) {
   const [printingId, setPrintingId] = useState<string | null>(null);
+  const pager = usePagination(interventions ?? [], 5);
 
   // The class has to be on the card before the print dialog opens, so the paint
   // is allowed to land first and the flag is cleared once printing returns.
@@ -498,16 +501,19 @@ export function InterventionPanel({
               <p className="text-sm text-body">No interventions recorded for this patient yet.</p>
             </Card>
           ) : (
-            interventions.map((intervention) => (
-              <InterventionCard
-                key={intervention.id}
-                intervention={intervention}
-                patientName={patientName}
-                printing={printingId === intervention.id}
-                onPrint={() => print(intervention.id)}
-                onChanged={onChanged}
-              />
-            ))
+            <>
+              {pager.pageItems.map((intervention) => (
+                <InterventionCard
+                  key={intervention.id}
+                  intervention={intervention}
+                  patientName={patientName}
+                  printing={printingId === intervention.id}
+                  onPrint={() => print(intervention.id)}
+                  onChanged={onChanged}
+                />
+              ))}
+              <Pagination {...pager} onPageChange={pager.setPage} noun="interventions" className="print:hidden" />
+            </>
           )}
         </div>
       </div>

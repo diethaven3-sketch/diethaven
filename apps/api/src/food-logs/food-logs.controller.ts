@@ -2,11 +2,11 @@ import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } fr
 import {
   foodLogCreateSchema,
   foodLogUpdateSchema,
-  foodLogsQuerySchema,
+  ownFoodLogsQuerySchema,
   patientFoodLogsQuerySchema,
   type FoodLogCreateInput,
   type FoodLogUpdateInput,
-  type FoodLogsQuery,
+  type OwnFoodLogsQuery,
   type PatientFoodLogsQuery,
 } from "@repo/types";
 import { Role } from "database";
@@ -36,7 +36,7 @@ export class FoodLogsController {
   @Get()
   list(
     @CurrentUser() user: AuthenticatedUser,
-    @Query(new ZodValidationPipe(foodLogsQuerySchema)) query: FoodLogsQuery,
+    @Query(new ZodValidationPipe(ownFoodLogsQuerySchema)) query: OwnFoodLogsQuery,
   ) {
     return this.foodLogsService.listOwn(user.id, query);
   }

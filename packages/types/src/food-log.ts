@@ -59,6 +59,18 @@ export const foodLogsQuerySchema = z.object({
 });
 export type FoodLogsQuery = z.infer<typeof foodLogsQuerySchema>;
 
+/**
+ * A patient's own diary. `limit` + `cursor` page it newest-first for infinite
+ * scroll: pass the id of the last entry you have as `cursor` to get the next
+ * (older) batch. Both are optional, and without them the whole range is
+ * returned, which older app builds and the home screen still rely on.
+ */
+export const ownFoodLogsQuerySchema = foodLogsQuerySchema.extend({
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+  cursor: z.string().min(1).optional(),
+});
+export type OwnFoodLogsQuery = z.infer<typeof ownFoodLogsQuerySchema>;
+
 export const patientFoodLogsQuerySchema = foodLogsQuerySchema.extend({
   patientId: z.string().min(1),
 });

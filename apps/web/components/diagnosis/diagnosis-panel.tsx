@@ -17,6 +17,8 @@ import { useAuth } from "../../lib/auth-context";
 import { Button } from "../ui/button";
 import { Banner } from "../ui/banner";
 import { Card } from "../ui/card";
+import { Pagination } from "../ui/pagination";
+import { usePagination } from "../../lib/use-pagination";
 import { Badge } from "../ui/badge";
 import { Field } from "../ui/input";
 import { SelectField } from "../ui/select";
@@ -406,6 +408,8 @@ export function DiagnosisPanel({
   diagnoses: DiagnosisRow[] | null;
   onChanged: () => void;
 }) {
+  const pager = usePagination(diagnoses ?? [], 5);
+
   return (
     <div className="flex flex-col gap-6">
       <DiagnosisForm patientId={patientId} assessments={assessments} onSaved={onChanged} />
@@ -420,9 +424,12 @@ export function DiagnosisPanel({
               <p className="text-sm text-body">No diagnoses recorded for this patient yet.</p>
             </Card>
           ) : (
-            diagnoses.map((diagnosis) => (
-              <DiagnosisCard key={diagnosis.id} diagnosis={diagnosis} onChanged={onChanged} />
-            ))
+            <>
+              {pager.pageItems.map((diagnosis) => (
+                <DiagnosisCard key={diagnosis.id} diagnosis={diagnosis} onChanged={onChanged} />
+              ))}
+              <Pagination {...pager} onPageChange={pager.setPage} noun="diagnoses" />
+            </>
           )}
         </div>
       </div>

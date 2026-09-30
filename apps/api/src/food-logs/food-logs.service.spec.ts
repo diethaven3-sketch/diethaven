@@ -84,6 +84,29 @@ describe("FoodLogsService", () => {
 
       expect(prisma.foodLog.findMany.mock.calls[0][0].where).toEqual({ patientId: patientA });
     });
+
+    it("returns everything, newest first, when no page size is given", async () => {
+      prisma.foodLog.findMany.mockResolvedValue([]);
+
+      await service.listOwn(patientA, {});
+
+      const args = prisma.foodLog.findMany.mock.calls[0][0];
+      expect(args.orderBy).toEqual([{ date: "desc" }, { id: "desc" }]);
+      expect(args.take).toBeUndefined();
+      expect(args.cursor).toBeUndefined();
+    });
+
+    it("pages from a cursor, skipping the cursor row itself, still scoped to the patient", async () => {
+      prisma.foodLog.findMany.mockResolvedValue([]);
+
+      await service.listOwn(patientA, { limit: 20, cursor: "log-40" });
+
+      const args = prisma.foodLog.findMany.mock.calls[0][0];
+      expect(args.take).toBe(20);
+      expect(args.cursor).toEqual({ id: "log-40" });
+      expect(args.skip).toBe(1);
+      expect(args.where.patientId).toBe(patientA);
+    });
   });
 
   describe("updateOwn", () => {

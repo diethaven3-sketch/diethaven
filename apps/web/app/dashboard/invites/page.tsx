@@ -13,6 +13,8 @@ import { Button } from "../../../components/ui/button";
 import { Card } from "../../../components/ui/card";
 import { EmptyState } from "../../../components/ui/empty-state";
 import { Modal } from "../../../components/ui/modal";
+import { Pagination } from "../../../components/ui/pagination";
+import { usePagination } from "../../../lib/use-pagination";
 import { TableSkeleton } from "../../../components/ui/skeleton";
 import { Table, Thead, Tbody, Th, Td } from "../../../components/ui/table";
 import { CopyButton, InvitePatientForm, shareMessage } from "../../../components/invites/invite-form";
@@ -87,7 +89,11 @@ function InvitesPage() {
     return result;
   }, [invites]);
 
-  const visible = (invites ?? []).filter((invite) => filter === "ALL" || invite.status === filter);
+  const visible = useMemo(
+    () => (invites ?? []).filter((invite) => filter === "ALL" || invite.status === filter),
+    [invites, filter],
+  );
+  const pager = usePagination(visible, 10, filter);
 
   return (
     <AppShell title="Patient invites">
@@ -152,7 +158,7 @@ function InvitesPage() {
                 </tr>
               </Thead>
               <Tbody>
-                {visible.map((invite) => (
+                {pager.pageItems.map((invite) => (
                   <tr key={invite.id}>
                     <Td className="font-medium text-heading">{invite.email}</Td>
                     <Td>
@@ -187,6 +193,7 @@ function InvitesPage() {
                 ))}
               </Tbody>
             </Table>
+            <Pagination {...pager} onPageChange={pager.setPage} noun="invites" className="border-t border-gray-200 px-5 py-3" />
           </div>
         )}
       </Card>

@@ -26,6 +26,8 @@ import { Card } from "../../../../components/ui/card";
 import { EmptyState } from "../../../../components/ui/empty-state";
 import { DetailCardSkeleton, TableSkeleton } from "../../../../components/ui/skeleton";
 import { Table, Thead, Tbody, Th, Td } from "../../../../components/ui/table";
+import { Pagination } from "../../../../components/ui/pagination";
+import { usePagination } from "../../../../lib/use-pagination";
 import { statusTone } from "../page";
 
 interface DietitianDetail {
@@ -45,12 +47,15 @@ interface DietitianDetail {
   patients: { id: string; name: string; email: string; linkedAt: string }[];
 }
 
+const NO_PATIENTS: DietitianDetail["patients"] = [];
+
 function DietitianDetailView({ id }: { id: string }) {
   const { token } = useAuth();
   const router = useRouter();
   const [dietitian, setDietitian] = useState<DietitianDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
+  const pager = usePagination(dietitian?.patients ?? NO_PATIENTS, 10);
 
   const load = useCallback(async () => {
     try {
@@ -234,7 +239,7 @@ function DietitianDetailView({ id }: { id: string }) {
                   </tr>
                 </Thead>
                 <Tbody>
-                  {dietitian.patients.map((p) => (
+                  {pager.pageItems.map((p) => (
                     <tr key={p.id} className="hover:bg-gray-50/70 transition-colors">
                       <Td className="font-semibold text-heading">{p.name}</Td>
                       <Td className="text-body/80">{p.email}</Td>
@@ -244,6 +249,7 @@ function DietitianDetailView({ id }: { id: string }) {
                 </Tbody>
               </Table>
             )}
+            <Pagination {...pager} onPageChange={pager.setPage} noun="patients" className="border-t border-gray-200 px-5 py-3" />
           </Card>
         </>
       )}

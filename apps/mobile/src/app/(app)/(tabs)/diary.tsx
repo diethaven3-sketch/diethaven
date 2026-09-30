@@ -1,22 +1,28 @@
 import { router } from "expo-router";
 import { Plus } from "lucide-react-native";
-import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
+import { Pressable, RefreshControl, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MEAL_TYPE_LABELS } from "@repo/types";
 import { colors } from "@repo/ui-tokens";
-import { useApiQuery } from "@/lib/use-api";
+import { useInfiniteApiQuery } from "@/lib/use-infinite";
+import { InfiniteScrollView } from "@/components/infinite-scroll-view";
 import { formatDayHeading, formatTime, groupByDay, summariseEntry, type FoodLogEntry } from "@/lib/food-log";
 import { Banner } from "@/components/ui/banner";
 import { FoodLogItem } from "@/components/ui/food-log-item";
 import { EmptyState, LoadingState } from "@/components/ui/states";
 
 export default function Diary() {
-  const { data, error, loading, refreshing, refetch } = useApiQuery<FoodLogEntry[]>("/food-logs");
-  const days = groupByDay(data ?? []);
+  const { items, error, loading, refreshing, refetch, loadingMore, hasMore, loadMore } =
+    useInfiniteApiQuery<FoodLogEntry>("/food-logs", 20);
+  const days = groupByDay(items);
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
-      <ScrollView
+      <InfiniteScrollView
+        hasMore={hasMore && !error}
+        loadingMore={loadingMore}
+        onEndReached={loadMore}
+        endMessage={days.length > 0 ? "That's the start of your diary." : undefined}
         contentContainerClassName="gap-5 px-5 pb-28 pt-4"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refetch} tintColor={colors.primary} />}
       >
@@ -34,7 +40,7 @@ export default function Diary() {
 
         {loading ? (
           <LoadingState />
-        ) : error ? (
+        ) : error && items.length === 0 ? (
           <Banner tone="danger">{error}</Banner>
         ) : days.length === 0 ? (
           <EmptyState
@@ -57,7 +63,8 @@ export default function Diary() {
             </View>
           ))
         )}
-      </ScrollView>
+        {error && items.length > 0 ? <Banner tone="danger">{error}</Banner> : null}
+      </InfiniteScrollView>
     </SafeAreaView>
   );
 }

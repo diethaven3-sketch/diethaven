@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ScrollText, ChevronLeft, ChevronRight, ShieldCheck, FilterX } from "lucide-react";
+import { ScrollText, ShieldCheck, FilterX } from "lucide-react";
 import { apiFetch, ApiError } from "../../../lib/api-client";
 import { useAuth } from "../../../lib/auth-context";
 import { RequireRole } from "../../../components/require-role";
@@ -14,6 +14,7 @@ import { CustomSelect } from "../../../components/ui/custom-select";
 import { EmptyState } from "../../../components/ui/empty-state";
 import { TableSkeleton } from "../../../components/ui/skeleton";
 import { Table, Thead, Tbody, Th, Td } from "../../../components/ui/table";
+import { Pagination } from "../../../components/ui/pagination";
 
 type AuditAction = "CREATE" | "UPDATE" | "VIEW";
 
@@ -203,33 +204,17 @@ function AuditLogPage() {
         )}
       </Card>
 
-      {data && data.total > data.pageSize ? (
-        <div className="mt-4 flex items-center justify-between text-sm text-body">
-          <span className="text-xs text-body/70">
-            Page <span className="font-semibold text-heading">{data.page}</span> of{" "}
-            <span className="font-semibold text-heading">{totalPages}</span>
-          </span>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => p - 1)}
-              className="text-xs flex items-center gap-1 px-3 py-1.5"
-            >
-              <ChevronLeft size={14} />
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
-              className="text-xs flex items-center gap-1 px-3 py-1.5"
-            >
-              Next
-              <ChevronRight size={14} />
-            </Button>
-          </div>
-        </div>
+      {data ? (
+        <Pagination
+          page={data.page}
+          totalPages={totalPages}
+          total={data.total}
+          start={data.total === 0 ? 0 : (data.page - 1) * data.pageSize + 1}
+          end={Math.min(data.page * data.pageSize, data.total)}
+          onPageChange={setPage}
+          noun="entries"
+          className="mt-4"
+        />
       ) : null}
     </AdminShell>
   );

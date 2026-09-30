@@ -38,6 +38,8 @@ import { SearchInput } from "../../components/ui/search-input";
 import { Skeleton, StatCardSkeleton, TableSkeleton } from "../../components/ui/skeleton";
 import { Table, Thead, Tbody, Th, Td } from "../../components/ui/table";
 import { InvitePatientForm } from "../../components/invites/invite-form";
+import { Pagination } from "../../components/ui/pagination";
+import { usePagination } from "../../lib/use-pagination";
 import { ActivityChart, HorizontalBars, Meter, Sparkline } from "../../components/dashboard/charts";
 
 interface DietitianProfile {
@@ -228,6 +230,7 @@ function CaseloadTable({ patients }: { patients: PatientOverview[] }) {
         (!q || p.name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q)),
     );
   }, [patients, query, onlyFlagged]);
+  const pager = usePagination(visible, 10, `${query}|${onlyFlagged}`);
 
   return (
     <Card className="p-0">
@@ -267,7 +270,7 @@ function CaseloadTable({ patients }: { patients: PatientOverview[] }) {
               </tr>
             </Thead>
             <Tbody>
-              {visible.map((p) => (
+              {pager.pageItems.map((p) => (
                 <tr key={p.userId} className="align-middle">
                   <Td>
                     <Link href={`/dashboard/patients/${p.userId}`} className="group flex items-center gap-3">
@@ -366,6 +369,7 @@ function CaseloadTable({ patients }: { patients: PatientOverview[] }) {
               ))}
             </Tbody>
           </Table>
+          <Pagination {...pager} onPageChange={pager.setPage} noun="patients" className="border-t border-gray-200 px-5 py-3" />
         </div>
       )}
     </Card>
