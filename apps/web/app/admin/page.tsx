@@ -125,6 +125,15 @@ function ChartsSkeleton() {
   );
 }
 
+/**
+ * The web app and API deploy separately (Vercel vs Render), so for a few
+ * minutes the dashboard can be talking to an older API whose stats response
+ * predates these fields. Check before rendering rather than crash.
+ */
+function hasTrendData(stats: Partial<Stats>): stats is Stats {
+  return Array.isArray(stats.signups) && Array.isArray(stats.activity) && Array.isArray(stats.recentActions);
+}
+
 function PlatformCharts({ stats }: { stats: Stats }) {
   const activeInvites = Math.max(0, (stats.invites.PENDING ?? 0) - stats.lapsedInvites);
   const lastWeek = stats.signups[stats.signups.length - 1];
@@ -376,7 +385,7 @@ function Overview() {
             />
             <StatCard
               label="Pending invites"
-              value={Math.max(0, (stats.invites.PENDING ?? 0) - stats.lapsedInvites)}
+              value={Math.max(0, (stats.invites.PENDING ?? 0) - (stats.lapsedInvites ?? 0))}
               icon={Mail}
               accent="warning"
             />
@@ -401,7 +410,19 @@ function Overview() {
           <BarChart3 size={16} className="text-primary" />
           <h3 className="text-sm font-bold uppercase tracking-wider text-heading/80">Trends &amp; Activity</h3>
         </div>
-        {stats ? <PlatformCharts stats={stats} /> : error ? null : <ChartsSkeleton />}
+        {stats ? (
+          hasTrendData(stats) ? (
+            <PlatformCharts stats={stats} />
+          ) : (
+            <Card className="mt-4">
+              <p className="text-sm text-body/75">
+                Trend data isn&apos;t available from the API yet — it may still be deploying. Refresh in a few minutes.
+              </p>
+            </Card>
+          )
+        ) : error ? null : (
+          <ChartsSkeleton />
+        )}
       </div>
     </AdminShell>
   );

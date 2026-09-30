@@ -28,7 +28,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
 
   return (
     <div className="min-h-screen bg-surface">
-      <header className="bg-primary text-white">
+      <header className="sticky top-0 z-30 bg-primary text-white shadow-sm">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div>
             <p className="text-lg font-bold" style={{ fontFamily: "var(--font-heading)" }}>

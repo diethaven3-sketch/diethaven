@@ -51,7 +51,7 @@ export function AdminShell({ title, children }: { title: string; children: React
   const displayName = profile?.name || user?.email?.split("@")[0] || "Admin";
 
   return (
-    <div className="flex min-h-screen bg-surface">
+    <div className="flex h-dvh overflow-hidden bg-surface">
       {/* Desktop sidebar */}
       <aside className="hidden w-64 shrink-0 flex-col bg-primary text-white md:flex">
         <div className="flex items-center gap-3 px-6 py-5 border-b border-white/10">
@@ -141,9 +141,9 @@ export function AdminShell({ title, children }: { title: string; children: React
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
         {/* Mobile top bar + horizontal nav */}
-        <div className="md:hidden">
+        <div className="sticky top-0 z-20 md:hidden">
           <header className="flex items-center justify-between border-b border-gray-200 bg-primary px-4 py-3.5 text-white">
             <div className="flex items-center gap-2.5">
               <Avatar
