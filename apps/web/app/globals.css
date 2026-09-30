@@ -54,14 +54,21 @@
   }
 }
 
+/*
+ * The modal is centred by Tailwind's -translate-x/y-1/2, which (in v4) sets the
+ * standalone `translate` property. Browsers add `translate` and `transform`
+ * together, so this animation must not translate by -50% itself or the modal
+ * starts a whole width/height off-centre and snaps back when it ends. It only
+ * fades, scales, and nudges up a few pixels.
+ */
 @keyframes contentShow {
   from {
     opacity: 0;
-    transform: translate(-50%, -48%) scale(0.96);
+    transform: translateY(8px) scale(0.96);
   }
   to {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
+    transform: none;
   }
 }
 
